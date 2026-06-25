@@ -2,8 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   BGC Sports — Design System CSS Variables
+   ============================================================ */
+
 :root {
+  /* Dark mode (default) */
+  --bg-primary: #0a0e16;
+  --bg-secondary: #0f1521;
+  --bg-tertiary: #161e2e;
+  --bg-card: #0f1521;
+  --bg-card-hover: #161e2e;
+  --border-primary: #1e293b;
+  --border-secondary: #2a3a52;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --accent-primary: #22c55e;
+  --accent-secondary: #f97316;
+  --shadow-color: rgba(0, 0, 0, 0.4);
   color-scheme: dark;
+}
+
+.light {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --border-primary: #e2e8f0;
+  --border-secondary: #cbd5e1;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent-primary: #16a34a;
+  --accent-secondary: #ea580c;
+  --shadow-color: rgba(0, 0, 0, 0.1);
+  color-scheme: light;
 }
 
 html,
@@ -14,13 +49,17 @@ body,
 
 body {
   margin: 0;
-  background-color: #0a0e16;
-  color: #e2e8f0;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Thin custom scrollbar for chat / panels */
+/* ============================================================
+   Custom Scrollbar
+   ============================================================ */
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -29,9 +68,73 @@ body {
   background: transparent;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: #2a3a52;
+  background: var(--border-secondary);
   border-radius: 999px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: #3b4d6b;
+  background: var(--text-muted);
+}
+
+/* ============================================================
+   Utility Classes
+   ============================================================ */
+
+/* Glass morphism card effect */
+.glass-card {
+  background: rgba(15, 21, 33, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(30, 41, 59, 0.5);
+}
+.light .glass-card {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+/* Skeleton loading animation */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary) 25%,
+    var(--bg-card-hover) 50%,
+    var(--bg-tertiary) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+/* Glow effects on hover */
+.glow-green-hover:hover {
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+}
+.glow-orange-hover:hover {
+  box-shadow: 0 0 20px rgba(249, 115, 22, 0.3);
+}
+
+/* Button base styles */
+.btn-primary {
+  @apply rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-black transition-all duration-200 hover:bg-accent-dark hover:shadow-glow-green active:scale-[0.98];
+}
+.btn-secondary {
+  @apply rounded-xl bg-secondary px-4 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-secondary-dark hover:shadow-glow-orange active:scale-[0.98];
+}
+.btn-ghost {
+  @apply rounded-xl border border-ink-600 px-4 py-2.5 text-sm font-medium text-slate-300 transition-all duration-200 hover:border-ink-400 hover:bg-ink-700 active:scale-[0.98];
+}
+
+/* Card base styles */
+.card {
+  @apply rounded-2xl border border-ink-600 bg-ink-800 p-5 shadow-card transition-all duration-200;
+}
+.card:hover {
+  @apply border-ink-500 shadow-card-hover;
+}
+
+/* Input base styles */
+.input-field {
+  @apply w-full rounded-xl border border-ink-500 bg-ink-900 px-4 py-2.5 text-sm text-white outline-none transition-all duration-200 placeholder:text-slate-500 focus:border-accent focus:ring-1 focus:ring-accent/30;
+}
+
+/* Toast notification */
+.toast {
+  @apply fixed left-1/2 top-6 z-50 -translate-x-1/2 rounded-xl border border-ink-600 bg-ink-800 px-5 py-3 text-sm font-medium text-white shadow-lg animate-toast;
 }

@@ -1,19 +1,23 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
+// ---------------------------------------------------------------------------
+// Entry point — wraps the app with Router and ThemeProvider.
+// ---------------------------------------------------------------------------
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import './index.css';
+import { ThemeProvider } from './context/ThemeContext.jsx';
 import App from './App.jsx';
 import AdminPage from './pages/AdminPage.jsx';
+import './index.css';
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <Routes>
-        {/* Main watch-party experience. ?room=CODE deep-links into a room. */}
-        <Route path="/" element={<App />} />
-        {/* Password-protected admin panel for updating the stream URL. */}
-        <Route path="/admin" element={<AdminPage />} />
-      </Routes>
-    </BrowserRouter>
-  </React.StrictMode>
+createRoot(document.getElementById('root')).render(
+  <StrictMode>
+    <ThemeProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<App />} />
+          <Route path="/admin" element={<AdminPage />} />
+        </Routes>
+      </BrowserRouter>
+    </ThemeProvider>
+  </StrictMode>
 );

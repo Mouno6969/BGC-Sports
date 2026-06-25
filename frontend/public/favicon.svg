@@ -1,6 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <rect width="64" height="64" rx="14" fill="#0a0e16"/>
-  <circle cx="32" cy="32" r="18" fill="none" stroke="#22c55e" stroke-width="4"/>
-  <path d="M32 14 L32 50 M14 32 L50 32" stroke="#22c55e" stroke-width="3" opacity="0.5"/>
-  <circle cx="32" cy="32" r="5" fill="#ef4444"/>
+  <!-- Shield shape -->
+  <path d="M32 4 L56 14 L56 36 Q56 52 32 60 Q8 52 8 36 L8 14 Z" fill="#0f1521" stroke="#22c55e" stroke-width="2"/>
+  <!-- Inner accent lines -->
+  <path d="M32 8 L52 16 L52 35 Q52 48 32 56 Q12 48 12 35 L12 16 Z" fill="none" stroke="#f97316" stroke-width="1" opacity="0.6"/>
+  <!-- Ball element -->
+  <circle cx="32" cy="24" r="8" fill="none" stroke="#22c55e" stroke-width="2"/>
+  <path d="M28 18 L32 24 L36 18 M26 28 L32 24 L38 28" fill="none" stroke="#22c55e" stroke-width="1.5" opacity="0.7"/>
+  <!-- BGC text -->
+  <text x="32" y="46" text-anchor="middle" font-family="Arial Black, sans-serif" font-weight="900" font-size="12" fill="#ffffff" letter-spacing="1">BGC</text>
+  <!-- Live dot -->
+  <circle cx="32" cy="54" r="2" fill="#ef4444"/>
 </svg>

@@ -1,59 +1,54 @@
 // ---------------------------------------------------------------------------
-// Player — renders the live stream and integrates host playback sync.
-//
-// Supports three stream types:
-//   - "hls"     : native <video> + HLS.js (with native fallback for Safari)
-//   - "youtube" : embedded iframe
-//   - "twitch"  : embedded iframe
-//
-// Sync behaviour (HLS only — iframes can't be programmatically scrubbed):
-//   - If the local user is the room host, local play/pause/seek are broadcast
-//     to the room via `onLocalPlayback`.
-//   - Non-host participants receive host state through `registerRemote` and
-//     the player applies it (play/pause + seek if drift > threshold).
+// Player — HLS / YouTube / Twitch stream player with hero section,
+// loading skeletons, and improved visual design.
 // ---------------------------------------------------------------------------
-
 import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 
-const DRIFT_THRESHOLD = 1.5; // seconds of allowed drift before re-seeking
+const DRIFT_THRESHOLD = 2; // seconds
 
 function parseYouTubeId(url) {
-  const m = url.match(
-    /(?:youtube\.com\/(?:watch\?v=|embed\/|live\/)|youtu\.be\/)([\w-]{11})/
-  );
-  return m ? m[1] : null;
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtu.be')) return u.pathname.slice(1);
+    return u.searchParams.get('v') || '';
+  } catch {
+    return '';
+  }
 }
 
 function parseTwitchChannel(url) {
-  const m = url.match(/twitch\.tv\/([\w]+)/);
-  return m ? m[1] : null;
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('twitch.tv')) return u.pathname.replace('/', '');
+    return '';
+  } catch {
+    return '';
+  }
 }
 
 export default function Player({
-  stream, // { url, type }
-  isHost, // boolean — whether local user controls sync
-  inRoom, // boolean — whether a watch-party room is active
-  onLocalPlayback, // (isPlaying, currentTime) => void  (host broadcasts)
-  registerRemote, // (fn) => void  parent registers our remote handler
+  stream,
+  isHost,
+  inRoom,
+  onLocalPlayback,
+  registerRemote,
 }) {
+  const { url, type } = stream || {};
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
-  const applyingRemote = useRef(false); // guard to avoid echo loops
+  const applyingRemote = useRef(false);
   const [error, setError] = useState(null);
-
-  const type = stream?.type || 'hls';
-  const url = stream?.url || '';
+  const [loading, setLoading] = useState(true);
 
   // ----- HLS setup ----------------------------------------------------------
   useEffect(() => {
     if (type !== 'hls' || !url) return;
     const video = videoRef.current;
     if (!video) return;
-
     setError(null);
+    setLoading(true);
 
-    // Clean up any previous instance.
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
@@ -64,16 +59,19 @@ export default function Player({
       hlsRef.current = hls;
       hls.loadSource(url);
       hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => setLoading(false));
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (data.fatal) {
           setError('Stream error — the source may be offline.');
+          setLoading(false);
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native HLS (Safari / iOS)
       video.src = url;
+      video.addEventListener('loadeddata', () => setLoading(false), { once: true });
     } else {
       setError('HLS is not supported in this browser.');
+      setLoading(false);
     }
 
     return () => {
@@ -99,8 +97,6 @@ export default function Player({
     video.addEventListener('play', emit);
     video.addEventListener('pause', emit);
     video.addEventListener('seeked', emit);
-
-    // Periodic heartbeat so late joiners stay aligned.
     const interval = setInterval(() => {
       if (!video.paused) emit();
     }, 4000);
@@ -121,12 +117,9 @@ export default function Player({
     const applyRemote = (playback) => {
       const video = videoRef.current;
       if (!video || !playback) return;
-      // The host's own player should ignore remote echoes.
       if (isHost) return;
-
       applyingRemote.current = true;
 
-      // Estimate the host's "now" by accounting for time since update.
       const elapsed = playback.updatedAt
         ? (Date.now() - playback.updatedAt) / 1000
         : 0;
@@ -136,42 +129,61 @@ export default function Player({
       if (Math.abs(video.currentTime - target) > DRIFT_THRESHOLD) {
         try {
           video.currentTime = target;
-        } catch {
-          /* ignore seek errors on live edges */
-        }
+        } catch {}
       }
-
       if (playback.isPlaying && video.paused) {
         video.play().catch(() => {});
       } else if (!playback.isPlaying && !video.paused) {
         video.pause();
       }
 
-      // Release the guard shortly after applying.
       setTimeout(() => {
         applyingRemote.current = false;
       }, 300);
     };
-
     registerRemote(applyRemote);
   }, [type, isHost, registerRemote]);
 
-  // --------------------------- Render ---------------------------------------
+  // ----- No stream: Hero section --------------------------------------------
   if (!url) {
     return (
-      <div className="flex aspect-video w-full items-center justify-center rounded-xl bg-ink-800 text-slate-400">
-        No stream configured yet.
+      <div className="relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 shadow-card">
+        {/* Background pattern */}
+        <div className="absolute inset-0 opacity-5">
+          <div className="absolute inset-0" style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2322c55e' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          }} />
+        </div>
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-ink-900 via-transparent to-ink-900/50" />
+        {/* Content */}
+        <div className="relative z-10 flex flex-col items-center gap-4 px-6 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent/10 ring-1 ring-accent/20">
+            <svg className="h-8 w-8 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-display text-lg font-bold text-white">
+              No stream configured yet
+            </h3>
+            <p className="mt-1 text-sm text-slate-400">
+              The admin can set a live stream URL from the admin panel.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
+  // ----- YouTube embed ------------------------------------------------------
   if (type === 'youtube') {
     const id = parseYouTubeId(url);
     const src = id
       ? `https://www.youtube.com/embed/${id}?autoplay=1&rel=0`
       : url;
     return (
-      <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
+      <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black shadow-card ring-1 ring-ink-600/50">
         <iframe
           className="h-full w-full"
           src={src}
@@ -183,6 +195,7 @@ export default function Player({
     );
   }
 
+  // ----- Twitch embed -------------------------------------------------------
   if (type === 'twitch') {
     const channel = parseTwitchChannel(url);
     const parent =
@@ -191,7 +204,7 @@ export default function Player({
       ? `https://player.twitch.tv/?channel=${channel}&parent=${parent}&autoplay=true`
       : url;
     return (
-      <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
+      <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black shadow-card ring-1 ring-ink-600/50">
         <iframe
           className="h-full w-full"
           src={src}
@@ -202,9 +215,18 @@ export default function Player({
     );
   }
 
-  // Default: HLS via <video>
+  // ----- HLS player ---------------------------------------------------------
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black">
+    <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black shadow-card ring-1 ring-ink-600/50">
+      {/* Loading skeleton */}
+      {loading && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-ink-900">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-10 w-10 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+            <span className="text-sm text-slate-400">Loading stream...</span>
+          </div>
+        </div>
+      )}
       <video
         ref={videoRef}
         className="h-full w-full"
@@ -214,8 +236,15 @@ export default function Player({
         muted={!isHost && inRoom ? false : true}
       />
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/70 p-4 text-center text-sm text-red-300">
-          {error}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/80 p-4 text-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 ring-1 ring-red-500/20">
+              <svg className="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <p className="text-sm font-medium text-red-300">{error}</p>
+          </div>
         </div>
       )}
     </div>
