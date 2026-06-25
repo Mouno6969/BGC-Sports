@@ -12,6 +12,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { config, isLiveKitConfigured } from './config/index.js';
 import apiRoutes from './routes/api.js';
 import adminRoutes from './routes/admin.js';
+import channelsRoutes from './routes/channels.js';
 import { registerChatHandlers } from './sockets/chat.js';
 import { registerRoomHandlers } from './sockets/room.js';
 
@@ -41,6 +42,7 @@ app.get('/', (_req, res) => {
 });
 app.use('/api', apiRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/channels', channelsRoutes);
 
 // ------------------------------ Socket.IO ----------------------------------
 const io = new SocketIOServer(server, {
