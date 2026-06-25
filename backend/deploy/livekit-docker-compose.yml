@@ -1,0 +1,20 @@
+# ---------------------------------------------------------------------------
+# Optional: self-host LiveKit (SFU) via Docker instead of using LiveKit Cloud.
+#
+#   1. Generate keys:  docker run --rm livekit/generate
+#   2. Put the API key/secret in livekit.yaml below and in backend/.env
+#   3. docker compose -f livekit-docker-compose.yml up -d
+#
+# For production you also need TURN + TLS. See:
+#   https://docs.livekit.io/home/self-hosting/deployment/
+# ---------------------------------------------------------------------------
+version: "3.8"
+
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    command: --config /etc/livekit.yaml
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml

@@ -1,0 +1,28 @@
+# ---------------------------------------------------------------------------
+# systemd unit for the BGC Sports backend.
+# Copy to /etc/systemd/system/bgc-sports.service and adjust paths/user.
+#
+#   sudo cp deploy/bgc-sports.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bgc-sports
+#   sudo systemctl status bgc-sports
+# ---------------------------------------------------------------------------
+[Unit]
+Description=BGC Sports backend (Express + Socket.IO)
+After=network.target
+
+[Service]
+Type=simple
+# Adjust to the user that owns the app directory
+User=ubuntu
+WorkingDirectory=/opt/bgc-sports/backend
+# Use an absolute path to node if needed (run `which node`)
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=5
+# Load environment from the .env file
+EnvironmentFile=/opt/bgc-sports/backend/.env
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

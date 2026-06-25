@@ -1,0 +1,36 @@
+# ---------------------------------------------------------------------------
+# Nginx reverse proxy for the BGC Sports backend (HTTP API + Socket.IO).
+# Handles WebSocket upgrade headers required by Socket.IO.
+#
+#   sudo cp deploy/nginx.conf.example /etc/nginx/sites-available/bgc-sports
+#   sudo ln -s /etc/nginx/sites-available/bgc-sports /etc/nginx/sites-enabled/
+#   sudo nginx -t && sudo systemctl reload nginx
+#
+# Then secure with HTTPS:
+#   sudo certbot --nginx -d api.yourdomain.com
+# ---------------------------------------------------------------------------
+
+upstream bgc_sports_backend {
+    server 127.0.0.1:4000;
+}
+
+server {
+    listen 80;
+    server_name api.yourdomain.com;
+
+    location / {
+        proxy_pass http://bgc_sports_backend;
+        proxy_http_version 1.1;
+
+        # WebSocket upgrade (required for Socket.IO)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_read_timeout 86400;
+    }
+}

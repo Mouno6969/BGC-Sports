@@ -1,0 +1,75 @@
+// ---------------------------------------------------------------------------
+// BGC Sports — backend entrypoint.
+// Express HTTP API + Socket.IO realtime (public chat + watch-party rooms).
+// ---------------------------------------------------------------------------
+
+import 'dotenv/config';
+import http from 'http';
+import express from 'express';
+import cors from 'cors';
+import { Server as SocketIOServer } from 'socket.io';
+
+import { config, isLiveKitConfigured } from './config/index.js';
+import apiRoutes from './routes/api.js';
+import adminRoutes from './routes/admin.js';
+import { registerChatHandlers } from './sockets/chat.js';
+import { registerRoomHandlers } from './sockets/room.js';
+
+const app = express();
+const server = http.createServer(app);
+
+// ----------------------------- Middleware ----------------------------------
+app.use(
+  cors({
+    origin: config.clientOrigin,
+    credentials: true,
+  })
+);
+app.use(express.json());
+
+// Tiny request logger (kept lightweight for the MVP).
+app.use((req, _res, next) => {
+  if (req.path !== '/api/health') {
+    console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+  }
+  next();
+});
+
+// ------------------------------- Routes ------------------------------------
+app.get('/', (_req, res) => {
+  res.json({ name: 'BGC Sports API', status: 'ok' });
+});
+app.use('/api', apiRoutes);
+app.use('/api/admin', adminRoutes);
+
+// ------------------------------ Socket.IO ----------------------------------
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: config.clientOrigin,
+    credentials: true,
+  },
+});
+
+// Expose io to routes (admin uses it to broadcast stream updates).
+app.set('io', io);
+
+io.on('connection', (socket) => {
+  console.log(`[socket] connected: ${socket.id}`);
+  registerChatHandlers(io, socket);
+  registerRoomHandlers(io, socket);
+
+  socket.on('disconnect', (reason) => {
+    console.log(`[socket] disconnected: ${socket.id} (${reason})`);
+  });
+});
+
+// ------------------------------- Startup -----------------------------------
+server.listen(config.port, () => {
+  console.log('-----------------------------------------------------------');
+  console.log(` BGC Sports backend listening on port ${config.port}`);
+  console.log(` CORS origin(s): ${JSON.stringify(config.clientOrigin)}`);
+  console.log(
+    ` LiveKit: ${isLiveKitConfigured() ? 'ENABLED' : 'DISABLED (set LIVEKIT_* env vars)'}`
+  );
+  console.log('-----------------------------------------------------------');
+});

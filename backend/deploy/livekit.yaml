@@ -1,0 +1,18 @@
+# ---------------------------------------------------------------------------
+# Example LiveKit server config for self-hosting (used by Docker compose).
+# Replace the key/secret with values from `docker run --rm livekit/generate`
+# and mirror them in backend/.env (LIVEKIT_API_KEY / LIVEKIT_API_SECRET).
+# ---------------------------------------------------------------------------
+port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 60000
+  use_external_ip: true
+
+keys:
+  # APIkey: secret  (CHANGE THESE)
+  devkey: secretsecretsecretsecretsecretsecret
+
+logging:
+  level: info
