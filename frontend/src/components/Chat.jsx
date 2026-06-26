@@ -1,5 +1,6 @@
 // ---------------------------------------------------------------------------
-// Chat — live chat sidebar with improved design, reactions, and animations.
+// Chat — live public chat sidebar with reactions, animations, and proper
+// Socket.IO event handling matching the backend.
 // ---------------------------------------------------------------------------
 import { useEffect, useRef, useState } from 'react';
 import { socket } from '../lib/socket.js';
@@ -14,6 +15,8 @@ export default function Chat() {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [onlineCount, setOnlineCount] = useState(0);
+  const [myUsername, setMyUsername] = useState('');
+  const [myColor, setMyColor] = useState('#22c55e');
   const [reactions, setReactions] = useState({});
   const [openReactionFor, setOpenReactionFor] = useState(null);
   const listRef = useRef(null);
@@ -27,29 +30,47 @@ export default function Chat() {
     }
   }, []);
 
-  // Socket listeners
+  // Socket listeners — fixed to match backend events
   useEffect(() => {
+    function onWelcome({ username, color }) {
+      setMyUsername(username);
+      setMyColor(color);
+    }
+    function onHistory(history) {
+      setMessages(history);
+    }
     function onMessage(msg) {
       setMessages((prev) => [...prev.slice(-200), msg]);
     }
-    function onOnline({ count }) {
-      setOnlineCount(count);
+    function onCount(count) {
+      // Backend emits a bare number for chat:count
+      setOnlineCount(typeof count === 'number' ? count : count?.count || 0);
     }
-    function onReaction({ messageId, emoji, count }) {
-      setReactions((prev) => ({
-        ...prev,
-        [messageId]: { ...(prev[messageId] || {}), [emoji]: count },
-      }));
+    function onReaction({ messageId, emoji, username }) {
+      setReactions((prev) => {
+        const msgReactions = { ...(prev[messageId] || {}) };
+        msgReactions[emoji] = (msgReactions[emoji] || 0) + 1;
+        return { ...prev, [messageId]: msgReactions };
+      });
+    }
+    function onError({ error }) {
+      console.warn('[chat] error:', error);
     }
 
+    socket.on('chat:welcome', onWelcome);
+    socket.on('chat:history', onHistory);
     socket.on('chat:message', onMessage);
-    socket.on('chat:online', onOnline);
+    socket.on('chat:count', onCount);
     socket.on('chat:reaction', onReaction);
+    socket.on('chat:error', onError);
 
     return () => {
+      socket.off('chat:welcome', onWelcome);
+      socket.off('chat:history', onHistory);
       socket.off('chat:message', onMessage);
-      socket.off('chat:online', onOnline);
+      socket.off('chat:count', onCount);
       socket.off('chat:reaction', onReaction);
+      socket.off('chat:error', onError);
     };
   }, []);
 
@@ -105,10 +126,7 @@ export default function Chat() {
             maxLength={24}
             className="input-field text-center"
           />
-          <button
-            type="submit"
-            className="btn-primary w-full"
-          >
+          <button type="submit" className="btn-primary w-full">
             Enter Chat
           </button>
         </form>
