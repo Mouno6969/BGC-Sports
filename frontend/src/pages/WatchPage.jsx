@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Hls from 'hls.js';
-import { apiGet } from '../lib/config.js';
+import { apiGet, apiPost } from '../lib/config.js';
 import { getStoredUsername } from '../lib/utils.js';
 import ChannelCard from '../components/ChannelCard.jsx';
 import Chat from '../components/Chat.jsx';
@@ -304,6 +304,8 @@ export default function WatchPage() {
         if (data.fatal) {
           setError('Stream unavailable — the source may be offline or geo-restricted.');
           setLoading(false);
+          // Report dead stream to backend so it's hidden for everyone
+          apiPost('/api/channels/report-dead', { url }).catch(() => {});
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {

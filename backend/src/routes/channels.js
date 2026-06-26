@@ -1,14 +1,20 @@
 // ---------------------------------------------------------------------------
 // Channels API — serves the full sports channel database from channels.json
-// GET /api/channels         -> all channels
-// GET /api/channels/sports  -> sports channels only
-// GET /api/channels/groups  -> list of available groups
+// Automatically filters out dead channels detected by the health-check service.
+//
+// GET  /api/channels         -> all channels (dead filtered)
+// GET  /api/channels/sports  -> sports channels only (dead filtered)
+// GET  /api/channels/groups  -> list of available groups
+// GET  /api/channels/featured -> curated featured channels (dead filtered)
+// POST /api/channels/report-dead -> report a stream as dead from the player
+// GET  /api/channels/health-status -> admin: view dead channel stats
 // ---------------------------------------------------------------------------
 
 import { Router } from 'express';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { filterDead, reportDead, getDeadCount, getDeadUrls, startHealthCheckLoop } from '../utils/healthCheck.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -25,9 +31,13 @@ try {
   console.error('[channels] Failed to load channels.json:', err.message);
 }
 
+// Start the health-check loop (passes a getter so it always uses current channels)
+startHealthCheckLoop(() => channels);
+
 // GET /api/channels — return all channels, optionally filtered by group or search
+// Dead channels are automatically excluded.
 router.get('/', (req, res) => {
-  let result = channels;
+  let result = filterDead(channels);
   const { group, search, limit } = req.query;
 
   if (group && group !== 'all') {
@@ -52,9 +62,9 @@ router.get('/', (req, res) => {
   res.json({ ok: true, count: result.length, channels: result });
 });
 
-// GET /api/channels/sports — sports + live channels only
+// GET /api/channels/sports — sports + live channels only (dead filtered)
 router.get('/sports', (req, res) => {
-  const sports = channels.filter(
+  const sports = filterDead(channels).filter(
     (ch) =>
       ch.group &&
       (ch.group.toLowerCase() === 'sports' || ch.group.toLowerCase() === 'live')
@@ -64,8 +74,9 @@ router.get('/sports', (req, res) => {
 
 // GET /api/channels/groups — list all available groups with counts
 router.get('/groups', (req, res) => {
+  const alive = filterDead(channels);
   const groups = {};
-  channels.forEach((ch) => {
+  alive.forEach((ch) => {
     const g = ch.group || 'Other';
     groups[g] = (groups[g] || 0) + 1;
   });
@@ -75,9 +86,9 @@ router.get('/groups', (req, res) => {
   res.json({ ok: true, groups: list });
 });
 
-// GET /api/channels/featured — curated featured channels for homepage
+// GET /api/channels/featured — curated featured channels for homepage (dead filtered)
 router.get('/featured', (req, res) => {
-  const featured = channels
+  const featured = filterDead(channels)
     .filter(
       (ch) =>
         ch.group &&
@@ -87,6 +98,26 @@ router.get('/featured', (req, res) => {
     )
     .slice(0, 12);
   res.json({ ok: true, channels: featured });
+});
+
+// POST /api/channels/report-dead — player reports a stream as dead
+// Called automatically when the HLS player hits a fatal error.
+router.post('/report-dead', (req, res) => {
+  const { url } = req.body;
+  if (!url) {
+    return res.status(400).json({ ok: false, error: 'Missing url in request body' });
+  }
+  reportDead(url);
+  res.json({ ok: true, message: 'Stream reported as dead' });
+});
+
+// GET /api/channels/health-status — admin debug endpoint
+router.get('/health-status', (req, res) => {
+  res.json({
+    ok: true,
+    deadCount: getDeadCount(),
+    deadUrls: getDeadUrls(),
+  });
 });
 
 export default router;

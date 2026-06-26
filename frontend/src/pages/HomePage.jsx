@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { apiGet } from '../lib/config.js';
 import ChannelCard from '../components/ChannelCard.jsx';
 import LiveScoresSection from '../components/LiveScoresSection.jsx';
+import WorldCupSection from '../components/WorldCupSection.jsx';
 import CountdownTimer from '../components/CountdownTimer.jsx';
 
 const CATEGORY_COLORS = {
@@ -220,6 +221,11 @@ export default function HomePage() {
           </div>
         </div>
       </motion.section>
+
+      {/* ── FIFA World Cup 2026 Section ─────────────────────────────────── */}
+      <RevealOnScroll>
+        <WorldCupSection />
+      </RevealOnScroll>
 
       {/* ── Live Scores Section ───────────────────────────────────────────── */}
       <RevealOnScroll>
