@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // WatchPage — Redesigned: Video player with working quality selector,
-// fit-to-screen toggle, and communication (chat/DM/call) below the video.
-// Desktop: video left + chat right. Mobile: video top, chat below.
+// fit-to-screen toggle, and communication (public chat + private room) below
+// the video. Desktop: video left + panel right. Mobile: video top, panel below.
 // ---------------------------------------------------------------------------
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
@@ -11,13 +11,11 @@ import { apiGet, apiPost } from '../lib/config.js';
 import { getStoredUsername } from '../lib/utils.js';
 import ChannelCard from '../components/ChannelCard.jsx';
 import Chat from '../components/Chat.jsx';
-import PrivateChat from '../components/PrivateChat.jsx';
-import PeerCall from '../components/PeerCall.jsx';
+import PrivateRoom from '../components/PrivateRoom.jsx';
 
 const COMM_TABS = [
   { id: 'chat', label: 'Chat', icon: 'chat' },
-  { id: 'dm', label: 'DM', icon: 'dm' },
-  { id: 'call', label: 'Call', icon: 'call' },
+  { id: 'room', label: 'Room', icon: 'room' },
 ];
 
 function CommIcon({ type, className }) {
@@ -28,16 +26,10 @@ function CommIcon({ type, className }) {
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
       );
-    case 'dm':
+    case 'room':
       return (
         <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-        </svg>
-      );
-    case 'call':
-      return (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 100-8 4 4 0 000 8z" />
         </svg>
       );
     default:
@@ -594,15 +586,14 @@ function CommunicationPanel({ activeTab, onTabChange, channelId, username }) {
         ))}
       </div>
 
-      {/* Tab Content */}
+      {/* Tab Content (both mounted; toggle visibility to preserve room state) */}
       <div className="flex-1 overflow-hidden">
-        {activeTab === 'chat' && <Chat />}
-        {activeTab === 'dm' && <PrivateChat />}
-        {activeTab === 'call' && (
-          <div className="h-full overflow-y-auto p-3 scrollbar-thin">
-            <PeerCall channelId={channelId} username={username} />
-          </div>
-        )}
+        <div className={`h-full ${activeTab === 'chat' ? 'block' : 'hidden'}`}>
+          <Chat />
+        </div>
+        <div className={`h-full ${activeTab === 'room' ? 'block' : 'hidden'}`}>
+          <PrivateRoom />
+        </div>
       </div>
     </div>
   );

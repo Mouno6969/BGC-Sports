@@ -1,7 +1,8 @@
 // ---------------------------------------------------------------------------
 // BGC Sports — backend entrypoint.
-// Express HTTP API + Socket.IO realtime (public chat + private DM + watch-party
-// rooms + WebRTC call signaling).
+// Express HTTP API + Socket.IO realtime (public chat + PRIVATE ROOMS with
+// group chat, room-scoped video/audio calls, and full host controls +
+// watch-party rooms + legacy WebRTC call signaling).
 // ---------------------------------------------------------------------------
 
 import 'dotenv/config';
@@ -19,7 +20,7 @@ import scoresRoute from './routes/scores.js';
 import { registerChatHandlers } from './sockets/chat.js';
 import { registerRoomHandlers } from './sockets/room.js';
 import { registerCallHandlers } from './sockets/call.js';
-import { registerPrivateChatHandlers } from './sockets/privateChat.js';
+import { registerPrivateRoomHandlers } from './sockets/privateRoom.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -67,7 +68,7 @@ io.on('connection', (socket) => {
   registerChatHandlers(io, socket);
   registerRoomHandlers(io, socket);
   registerCallHandlers(io, socket);
-  registerPrivateChatHandlers(io, socket);
+  registerPrivateRoomHandlers(io, socket);
 
   socket.on('disconnect', (reason) => {
     console.log(`[socket] disconnected: ${socket.id} (${reason})`);
@@ -82,7 +83,7 @@ server.listen(config.port, () => {
   console.log(
     ` LiveKit: ${isLiveKitConfigured() ? 'ENABLED' : 'DISABLED (set LIVEKIT_* env vars)'}`
   );
-  console.log(' WebRTC P2P Calls: ENABLED');
-  console.log(' Private Chat (DM): ENABLED');
+  console.log(' Private Rooms: ENABLED (group chat + video/audio call)');
+  console.log(' Host Controls: kick, force-mute, lock, end-call, transfer-host');
   console.log('-----------------------------------------------------------');
 });
