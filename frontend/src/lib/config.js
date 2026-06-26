@@ -12,6 +12,16 @@ export async function apiGet(path) {
   return res.json();
 }
 
+/**
+ * Returns a proxied URL for a channel logo image.
+ * Routes through the backend proxy to fix Content-Disposition: attachment issues
+ * (e.g. s3.aynaott.com returns images as file downloads instead of displayable images).
+ */
+export function logoUrl(url) {
+  if (!url || !url.startsWith('http')) return url;
+  return `${BACKEND_URL}/api/logo-proxy?url=${encodeURIComponent(url)}`;
+}
+
 /** POST helper returning parsed JSON. `headers` lets callers add auth. */
 export async function apiPost(path, body, headers = {}) {
   const res = await fetch(`${BACKEND_URL}${path}`, {

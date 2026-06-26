@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { logoUrl } from '../lib/config.js';
 
 const GROUP_BADGE_COLORS = {
   Sports: 'bg-green-500/20 text-green-400',
@@ -47,6 +48,7 @@ function getViewerCount(name) {
 export default function ChannelCard({ channel, featured = false }) {
   const { name, logo, group, url } = channel;
   const badgeColor = GROUP_BADGE_COLORS[group] || 'bg-slate-500/20 text-slate-400';
+  const proxiedLogo = logoUrl(logo);
   const watchUrl = `/watch?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}&logo=${encodeURIComponent(logo || '')}`;
   const quality = getQualityBadge(name, group);
   const qualityColor = QUALITY_COLORS[quality] || QUALITY_COLORS['HD'];
@@ -70,9 +72,9 @@ export default function ChannelCard({ channel, featured = false }) {
 
       {/* Channel Logo */}
       <div className="relative flex aspect-[16/10] items-center justify-center overflow-hidden bg-[var(--bg-tertiary)] p-4">
-        {logo && logo.startsWith('http') ? (
+        {proxiedLogo && proxiedLogo.startsWith('http') ? (
           <img
-            src={logo}
+            src={proxiedLogo}
             alt={name}
             className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-110"
             onError={(e) => {
@@ -82,7 +84,7 @@ export default function ChannelCard({ channel, featured = false }) {
           />
         ) : null}
         <div
-          className={`flex h-full w-full items-center justify-center ${logo && logo.startsWith('http') ? 'hidden' : 'flex'}`}
+          className={`flex h-full w-full items-center justify-center ${proxiedLogo && proxiedLogo.startsWith('http') ? 'hidden' : 'flex'}`}
         >
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10">
             <svg className="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
