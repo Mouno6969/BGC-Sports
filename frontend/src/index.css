@@ -154,3 +154,97 @@ body {
 .animate-fadeInUp {
   animation: fadeInUp 0.4s ease-out forwards;
 }
+
+/* ============================================================
+   BGC Sports — Enhanced Animations & Theme (v2)
+   ============================================================ */
+
+/* Hero animated gradient background */
+@keyframes heroGradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.hero-animated-bg {
+  background: linear-gradient(
+    135deg,
+    #020b06 0%,
+    #051a0f 20%,
+    #0a0e16 40%,
+    #060d1a 60%,
+    #0a1a0a 80%,
+    #020b06 100%
+  );
+  background-size: 400% 400%;
+  animation: heroGradient 10s ease infinite;
+}
+
+.hero-gradient-text {
+  background-image: linear-gradient(90deg, #10B981, #34d399, #F59E0B);
+}
+
+.hero-cta-btn {
+  background: linear-gradient(135deg, #10B981, #F59E0B);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+  transition: all 0.3s ease;
+}
+.hero-cta-btn:hover {
+  box-shadow: 0 0 30px rgba(16, 185, 129, 0.6);
+  transform: translateY(-1px);
+}
+
+@keyframes neonPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(239,68,68,0.4), 0 0 16px rgba(239,68,68,0.2); }
+  50% { box-shadow: 0 0 16px rgba(239,68,68,0.7), 0 0 32px rgba(239,68,68,0.4); }
+}
+
+.live-now-badge {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  animation: neonPulse 1.5s ease-in-out infinite;
+}
+
+.channel-card-glow {
+  background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(245,158,11,0.15));
+  box-shadow: 0 0 0 1px rgba(16,185,129,0.3), 0 8px 24px rgba(16,185,129,0.15);
+}
+
+.channel-card:hover {
+  box-shadow: 0 0 0 1px rgba(16,185,129,0.3), 0 8px 32px rgba(16,185,129,0.15);
+}
+
+.light .hero-animated-bg {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 20%, #f8fafc 40%, #eff6ff 60%, #f0fdf4 80%, #f8fafc 100%);
+  background-size: 400% 400%;
+  animation: heroGradient 10s ease infinite;
+}
+
+.light .hero-gradient-text {
+  background-image: linear-gradient(90deg, #059669, #10B981, #D97706);
+}
+
+:root {
+  --emerald: #10B981;
+  --gold: #F59E0B;
+  --emerald-glow: rgba(16,185,129,0.3);
+  --gold-glow: rgba(245,158,11,0.3);
+}
+
+.glass-nav {
+  background: rgba(10, 14, 22, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(30, 41, 59, 0.5);
+}
+
+.light .glass-nav {
+  background: rgba(248, 250, 252, 0.8);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .mobile-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

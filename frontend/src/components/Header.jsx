@@ -12,17 +12,17 @@ export default function Header({ connected }) {
     <header className="relative z-10 flex items-center justify-between border-b border-ink-700/50 bg-ink-900/90 px-4 py-3 backdrop-blur-md dark:border-ink-700/50 dark:bg-ink-900/90">
       {/* Left: Logo + branding */}
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-accent/20 to-secondary/20 p-1 shadow-glow-sm">
+        <div className="flex h-10 items-center justify-center overflow-hidden">
           <img
             src="/logo.png"
             alt="BGC Sports"
-            className="h-full w-full object-contain"
+            className="h-10 w-auto object-contain"
             onError={(e) => {
               e.target.style.display = 'none';
-              e.target.nextSibling.style.display = 'flex';
+              if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
             }}
           />
-          <div className="hidden h-full w-full items-center justify-center rounded-lg bg-ink-700">
+          <div className="hidden h-10 w-10 items-center justify-center rounded-lg bg-ink-700">
             <span className="text-lg font-extrabold text-accent">B</span>
           </div>
         </div>
