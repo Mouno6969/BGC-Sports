@@ -1,130 +1,48 @@
 // ---------------------------------------------------------------------------
-// LiveScoresSection — dedicated live scores section on homepage
-// Shows upcoming and live football matches with team flags, scores, match time
-// Auto-refreshes every 60 seconds
+// LiveScoresSection — dedicated scores section on homepage showing REAL match
+// data fetched from the backend (/api/scores -> TheSportsDB).
+// Shows live, upcoming, and finished matches with real team badges and scores.
+// Auto-refreshes every 60 seconds.
 // ---------------------------------------------------------------------------
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { apiGet, logoUrl } from '../lib/config.js';
 
-const MATCHES = [
-  {
-    id: 1,
-    league: 'Premier League',
-    leagueFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
-    home: 'Manchester City',
-    homeFlag: '🔵',
-    away: 'Arsenal',
-    awayFlag: '🔴',
-    homeScore: 2,
-    awayScore: 1,
-    status: 'LIVE',
-    minute: "67'",
-    time: null,
-  },
-  {
-    id: 2,
-    league: 'La Liga',
-    leagueFlag: '🇪🇸',
-    home: 'Real Madrid',
-    homeFlag: '⚪',
-    away: 'Barcelona',
-    awayFlag: '🔵',
-    homeScore: 0,
-    awayScore: 0,
-    status: 'LIVE',
-    minute: "23'",
-    time: null,
-  },
-  {
-    id: 3,
-    league: 'Champions League',
-    leagueFlag: '🏆',
-    home: 'Liverpool',
-    homeFlag: '🔴',
-    away: 'Chelsea',
-    awayFlag: '🔵',
-    homeScore: 2,
-    awayScore: 2,
-    status: 'LIVE',
-    minute: "78'",
-    time: null,
-  },
-  {
-    id: 4,
-    league: 'Serie A',
-    leagueFlag: '🇮🇹',
-    home: 'Inter Milan',
-    homeFlag: '🔵',
-    away: 'Napoli',
-    awayFlag: '🔵',
-    homeScore: 0,
-    awayScore: 1,
-    status: 'LIVE',
-    minute: "45'",
-    time: null,
-  },
-  {
-    id: 5,
-    league: 'Bundesliga',
-    leagueFlag: '🇩🇪',
-    home: 'Borussia Dortmund',
-    homeFlag: '🟡',
-    away: 'Bayern Munich',
-    awayFlag: '🔴',
-    homeScore: null,
-    awayScore: null,
-    status: 'UPCOMING',
-    minute: null,
-    time: 'Today 20:45',
-  },
-  {
-    id: 6,
-    league: 'Ligue 1',
-    leagueFlag: '🇫🇷',
-    home: 'PSG',
-    homeFlag: '🔵',
-    away: 'Marseille',
-    awayFlag: '⚪',
-    homeScore: null,
-    awayScore: null,
-    status: 'UPCOMING',
-    minute: null,
-    time: 'Today 21:00',
-  },
-  {
-    id: 7,
-    league: 'Premier League',
-    leagueFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
-    home: 'Tottenham',
-    homeFlag: '⚪',
-    away: 'Newcastle',
-    awayFlag: '⚫',
-    homeScore: 1,
-    awayScore: 0,
-    status: 'FT',
-    minute: 'FT',
-    time: null,
-  },
-  {
-    id: 8,
-    league: 'La Liga',
-    leagueFlag: '🇪🇸',
-    home: 'Atletico Madrid',
-    homeFlag: '🔴',
-    away: 'Sevilla',
-    awayFlag: '⚪',
-    homeScore: 3,
-    awayScore: 1,
-    status: 'FT',
-    minute: 'FT',
-    time: null,
-  },
-];
+function formatKickoff(match) {
+  if (!match.timestamp) return 'Scheduled';
+  const d = new Date(match.timestamp);
+  const today = new Date();
+  const isToday = d.toDateString() === today.toDateString();
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (isToday) return `Today ${time}`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ` ${time}`;
+}
+
+function TeamBadge({ badge, name }) {
+  if (badge) {
+    return (
+      <img
+        src={logoUrl(badge)}
+        alt={name}
+        className="h-8 w-8 object-contain"
+        onError={(e) => {
+          e.target.style.display = 'none';
+          if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+        }}
+      />
+    );
+  }
+  return (
+    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-xs font-bold text-accent">
+      {(name || '?').charAt(0)}
+    </div>
+  );
+}
 
 function MatchCard({ match, onMatchClick }) {
   const isLive = match.status === 'LIVE';
   const isUpcoming = match.status === 'UPCOMING';
-  const isFT = match.status === 'FT';
+  const isFinished = match.status === 'FINISHED';
 
   return (
     <motion.div
@@ -143,22 +61,21 @@ function MatchCard({ match, onMatchClick }) {
     >
       {/* League header */}
       <div className="mb-3 flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-          <span>{match.leagueFlag}</span>
+        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] truncate">
           {match.league}
         </span>
         {isLive && (
           <span className="flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-red-400 ring-1 ring-red-500/30">
             <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulseLive" />
-            {match.minute}
+            {match.progress ? `${match.progress}'` : 'LIVE'}
           </span>
         )}
         {isUpcoming && (
-          <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent ring-1 ring-accent/20">
-            {match.time}
+          <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent ring-1 ring-accent/20 whitespace-nowrap">
+            {formatKickoff(match)}
           </span>
         )}
-        {isFT && (
+        {isFinished && (
           <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">
             Full Time
           </span>
@@ -168,12 +85,17 @@ function MatchCard({ match, onMatchClick }) {
       {/* Teams & Score */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
-          <span className="text-lg">{match.homeFlag}</span>
+          <div className="relative">
+            <TeamBadge badge={match.homeBadge} name={match.home} />
+            <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-xs font-bold text-accent">
+              {(match.home || '?').charAt(0)}
+            </div>
+          </div>
           <span className="text-[11px] font-semibold text-[var(--text-primary)] text-center truncate w-full">{match.home}</span>
         </div>
 
         <div className="flex flex-col items-center gap-1 shrink-0">
-          {!isUpcoming ? (
+          {!isUpcoming && match.homeScore !== null ? (
             <span className={`text-xl font-extrabold px-3 py-1 rounded-lg ${isLive ? 'text-red-400 bg-red-500/10' : 'text-white bg-ink-700'}`}>
               {match.homeScore} - {match.awayScore}
             </span>
@@ -186,12 +108,17 @@ function MatchCard({ match, onMatchClick }) {
         </div>
 
         <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
-          <span className="text-lg">{match.awayFlag}</span>
+          <div className="relative">
+            <TeamBadge badge={match.awayBadge} name={match.away} />
+            <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-xs font-bold text-accent">
+              {(match.away || '?').charAt(0)}
+            </div>
+          </div>
           <span className="text-[11px] font-semibold text-[var(--text-primary)] text-center truncate w-full">{match.away}</span>
         </div>
       </div>
 
-      {/* Watch button */}
+      {/* Watch button for live */}
       {isLive && (
         <div className="mt-3 flex items-center justify-center">
           <span className="text-[10px] font-bold text-accent hover:text-accent-light transition-colors">
@@ -203,42 +130,70 @@ function MatchCard({ match, onMatchClick }) {
   );
 }
 
+function SkeletonCard() {
+  return (
+    <div className="rounded-xl border border-ink-600/50 bg-ink-800/50 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="skeleton h-3 w-20 rounded" />
+        <div className="skeleton h-4 w-12 rounded-full" />
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col items-center gap-1 flex-1">
+          <div className="skeleton h-8 w-8 rounded-full" />
+          <div className="skeleton h-3 w-14 rounded" />
+        </div>
+        <div className="skeleton h-8 w-14 rounded-lg" />
+        <div className="flex flex-col items-center gap-1 flex-1">
+          <div className="skeleton h-8 w-8 rounded-full" />
+          <div className="skeleton h-3 w-14 rounded" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LiveScoresSection({ onMatchClick }) {
-  const [matches, setMatches] = useState(MATCHES);
-  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [matches, setMatches] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
 
-  // Auto-refresh every 60 seconds
+  // Fetch real scores from backend + auto-refresh every 60s
   useEffect(() => {
-    const interval = setInterval(() => {
-      // In production this would fetch from RapidAPI
-      // For now we just update the timestamp and slightly randomize live scores
-      setMatches(prev =>
-        prev.map(m => {
-          if (m.status === 'LIVE' && m.minute) {
-            const minNum = parseInt(m.minute);
-            if (!isNaN(minNum) && minNum < 90) {
-              return { ...m, minute: `${Math.min(minNum + 1, 90)}'` };
-            }
-          }
-          return m;
-        })
-      );
-      setLastUpdated(new Date());
-    }, 60000);
-    return () => clearInterval(interval);
+    let alive = true;
+    const load = async () => {
+      try {
+        const data = await apiGet('/api/scores');
+        if (alive && data.matches) {
+          setMatches(data.matches);
+          setLastUpdated(new Date());
+        }
+      } catch {
+        // leave existing data
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
+    load();
+    const interval = setInterval(load, 60000);
+    return () => {
+      alive = false;
+      clearInterval(interval);
+    };
   }, []);
 
-  const filtered = matches.filter(m => {
+  const filtered = matches.filter((m) => {
     if (activeFilter === 'live') return m.status === 'LIVE';
     if (activeFilter === 'upcoming') return m.status === 'UPCOMING';
-    if (activeFilter === 'finished') return m.status === 'FT';
+    if (activeFilter === 'finished') return m.status === 'FINISHED';
     return true;
   });
 
   const handleMatchClick = (match) => {
     if (onMatchClick) onMatchClick(match);
   };
+
+  const liveCount = matches.filter((m) => m.status === 'LIVE').length;
 
   return (
     <section className="space-y-4">
@@ -249,9 +204,13 @@ export default function LiveScoresSection({ onMatchClick }) {
             <span className="text-sm">⚽</span>
           </div>
           <div>
-            <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">Live Scores</h2>
+            <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">
+              Football Scores {liveCount > 0 && <span className="text-red-400">({liveCount} live)</span>}
+            </h2>
             <p className="text-[10px] text-[var(--text-muted)]">
-              Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · Auto-refreshes every 60s
+              {lastUpdated
+                ? `Real data · Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · Auto-refreshes every 60s`
+                : 'Loading real match data...'}
             </p>
           </div>
         </div>
@@ -263,7 +222,7 @@ export default function LiveScoresSection({ onMatchClick }) {
             { id: 'live', label: '🔴 Live' },
             { id: 'upcoming', label: '🕐 Upcoming' },
             { id: 'finished', label: '✓ Finished' },
-          ].map(f => (
+          ].map((f) => (
             <button
               key={f.id}
               onClick={() => setActiveFilter(f.id)}
@@ -280,11 +239,25 @@ export default function LiveScoresSection({ onMatchClick }) {
       </div>
 
       {/* Match Grid */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {filtered.map(match => (
-          <MatchCard key={match.id} match={match} onMatchClick={handleMatchClick} />
-        ))}
-      </div>
+      {loading ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-xl border border-ink-600/50 bg-ink-800/30 p-8 text-center">
+          <p className="text-sm text-[var(--text-muted)]">
+            No {activeFilter !== 'all' ? activeFilter : ''} matches available right now.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {filtered.map((match) => (
+            <MatchCard key={match.id} match={match} onMatchClick={handleMatchClick} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
