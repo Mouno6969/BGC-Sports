@@ -567,7 +567,7 @@ export default function WatchPage() {
 // ─── Communication Panel Component ──────────────────────────────────────────
 function CommunicationPanel({ activeTab, onTabChange, channelId, username }) {
   return (
-    <div className="flex flex-col rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden h-[400px] lg:h-[calc(100vh-120px)]">
+    <div className="flex flex-col rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden h-[70vh] min-h-[440px] lg:h-[calc(100vh-120px)] lg:min-h-0">
       {/* Tab Bar */}
       <div className="flex border-b border-[var(--border-primary)] bg-[var(--bg-tertiary)]/50">
         {COMM_TABS.map((tab) => (
