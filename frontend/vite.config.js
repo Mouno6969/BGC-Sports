@@ -9,4 +9,9 @@ export default defineConfig({
     host: true,
     allowedHosts: ['.manus.computer'],
   },
+  preview: {
+    port: 5173,
+    host: true,
+    allowedHosts: ['.manus.computer'],
+  },
 });

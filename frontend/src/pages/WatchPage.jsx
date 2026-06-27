@@ -183,13 +183,61 @@ export default function WatchPage() {
     else video.pause();
   };
 
-  const toggleFullscreen = () => {
+  // Detect coarse-pointer / phone-sized devices where orientation lock makes sense
+  const isMobileDevice = () =>
+    typeof window !== 'undefined' &&
+    (window.matchMedia?.('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
+
+  const lockLandscape = useCallback(async () => {
+    if (!isMobileDevice()) return;
+    try {
+      // Screen Orientation API (Android/Chromium). iOS Safari does not support lock().
+      if (screen.orientation && typeof screen.orientation.lock === 'function') {
+        await screen.orientation.lock('landscape');
+      }
+    } catch {
+      /* lock may be rejected (e.g. iOS, not user-activated) — ignore gracefully */
+    }
+  }, []);
+
+  const unlockOrientation = useCallback(() => {
+    try {
+      if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+        screen.orientation.unlock();
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggleFullscreen = async () => {
     const container = containerRef.current;
     if (!container) return;
     if (!document.fullscreenElement) {
-      container.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+      try {
+        // Prefer the standard API; fall back to WebKit for older iOS Safari.
+        if (container.requestFullscreen) {
+          await container.requestFullscreen();
+        } else if (container.webkitRequestFullscreen) {
+          container.webkitRequestFullscreen();
+        } else if (videoRef.current?.webkitEnterFullscreen) {
+          // iOS Safari only allows native video fullscreen; it auto-rotates by itself.
+          videoRef.current.webkitEnterFullscreen();
+        }
+        setIsFullscreen(true);
+        await lockLandscape();
+      } catch {
+        /* ignore */
+      }
     } else {
-      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+      try {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      } catch {
+        /* ignore */
+      }
+      unlockOrientation();
+      setIsFullscreen(false);
     }
   };
 
@@ -215,12 +263,23 @@ export default function WatchPage() {
     }
   };
 
-  // Fullscreen change listener
+  // Fullscreen change listener — keep state in sync and unlock orientation
+  // when fullscreen is exited via the system back gesture / Escape key.
   useEffect(() => {
-    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    const handler = () => {
+      const fs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      setIsFullscreen(fs);
+      if (!fs) unlockOrientation();
+    };
     document.addEventListener('fullscreenchange', handler);
-    return () => document.removeEventListener('fullscreenchange', handler);
-  }, []);
+    document.addEventListener('webkitfullscreenchange', handler);
+    return () => {
+      document.removeEventListener('fullscreenchange', handler);
+      document.removeEventListener('webkitfullscreenchange', handler);
+      // Safety: release any orientation lock when leaving the page.
+      unlockOrientation();
+    };
+  }, [unlockOrientation]);
 
   // No URL state
   if (!url) {
@@ -257,13 +316,14 @@ export default function WatchPage() {
           {/* Video Player Container */}
           <div
             ref={containerRef}
-            className={`relative w-full overflow-hidden rounded-xl bg-black shadow-lg ring-1 ring-[var(--border-primary)] ${isFullscreen ? '' : 'aspect-video'}`}
+            data-player-container
+            className={`player-container relative w-full overflow-hidden rounded-xl bg-black shadow-lg ring-1 ring-[var(--border-primary)] ${isFullscreen ? 'is-fullscreen' : 'aspect-video'}`}
             onMouseMove={resetHideTimer}
             onTouchStart={resetHideTimer}
           >
             <video
               ref={videoRef}
-              className={`h-full w-full ${fitToScreen ? 'object-cover' : 'object-contain'}`}
+              className={`player-video h-full w-full ${fitToScreen ? 'object-cover' : 'object-contain'}`}
               playsInline
               autoPlay
               muted

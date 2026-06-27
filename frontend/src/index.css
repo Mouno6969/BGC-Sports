@@ -248,3 +248,44 @@ body {
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/* ============================================================
+   Video Player — Fullscreen & Fit-to-screen behaviour
+   ------------------------------------------------------------
+   In fullscreen, force the player container to truly fill the
+   screen so the "Fill screen (cover)" toggle (object-cover) has
+   a visible effect in landscape orientation. Without this, some
+   browsers leave a flex/aspect-ratio box that doesn't stretch.
+   ============================================================ */
+.player-container:fullscreen,
+.player-container:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  border-radius: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The video should occupy the entire fullscreen area; object-fit
+   (cover/contain) then controls how the frame fills it. */
+.player-container:fullscreen .player-video,
+.player-container:-webkit-full-screen .player-video {
+  width: 100%;
+  height: 100%;
+}
+
+/* Some Android Chromium builds report fullscreen but keep the
+   aspect-ratio box; the JS-driven .is-fullscreen class guarantees
+   the container fills the viewport regardless of vendor quirks. */
+.player-container.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  border-radius: 0;
+}
