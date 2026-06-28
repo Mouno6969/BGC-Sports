@@ -51,12 +51,12 @@ function MatchCard({ match, onMatchClick }) {
       viewport={{ once: true }}
       transition={{ duration: 0.4 }}
       onClick={() => onMatchClick(match)}
-      className={`cursor-pointer rounded-xl border p-4 transition-all duration-300 hover:scale-[1.02] hover:shadow-glow-green ${
+      className={`cursor-pointer rounded-xl border p-4 transition-all duration-300 hover:scale-[1.02] ${
         isLive
           ? 'border-red-500/30 bg-red-500/5 hover:border-red-500/50'
           : isUpcoming
-          ? 'border-accent/20 bg-accent/5 hover:border-accent/40'
-          : 'border-ink-600/50 bg-ink-800/50 hover:border-ink-500'
+          ? 'border-[var(--accent)]/20 bg-[var(--accent)]/5 hover:border-[var(--accent)]/40'
+          : 'border-[var(--border-primary)] bg-[var(--bg-card)] hover:border-[var(--border-secondary)]'
       }`}
     >
       {/* League header */}
@@ -96,7 +96,7 @@ function MatchCard({ match, onMatchClick }) {
 
         <div className="flex flex-col items-center gap-1 shrink-0">
           {!isUpcoming && match.homeScore !== null ? (
-            <span className={`text-xl font-extrabold px-3 py-1 rounded-lg ${isLive ? 'text-red-400 bg-red-500/10' : 'text-white bg-ink-700'}`}>
+              <span className={`text-xl font-extrabold px-3 py-1 rounded-lg ${isLive ? 'text-red-400 bg-red-500/10' : 'text-[var(--text-primary)] bg-[var(--bg-tertiary)]'}`}>
               {match.homeScore} - {match.awayScore}
             </span>
           ) : (
@@ -132,7 +132,7 @@ function MatchCard({ match, onMatchClick }) {
 
 function SkeletonCard() {
   return (
-    <div className="rounded-xl border border-ink-600/50 bg-ink-800/50 p-4">
+    <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] p-4">
       <div className="mb-3 flex items-center justify-between">
         <div className="skeleton h-3 w-20 rounded" />
         <div className="skeleton h-4 w-12 rounded-full" />
@@ -246,7 +246,7 @@ export default function LiveScoresSection({ onMatchClick }) {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-ink-600/50 bg-ink-800/30 p-8 text-center">
+        <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] p-8 text-center">
           <p className="text-sm text-[var(--text-muted)]">
             No {activeFilter !== 'all' ? activeFilter : ''} matches available right now.
           </p>

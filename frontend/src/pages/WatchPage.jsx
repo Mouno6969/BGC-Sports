@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
-// WatchPage — Redesigned: Video player with working quality selector,
-// fit-to-screen toggle, and communication (public chat + private room) below
-// the video. Desktop: video left + panel right. Mobile: video top, panel below.
+// WatchPage — Redesigned: Video player with quality selector, fit-to-screen
+// toggle, and Watch Party Room (10-user calling grid) below the video.
+// Desktop: video top + watch party below. Chat panel on the right side.
 // ---------------------------------------------------------------------------
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
@@ -11,31 +11,7 @@ import { apiGet, apiPost } from '../lib/config.js';
 import { getStoredUsername } from '../lib/utils.js';
 import ChannelCard from '../components/ChannelCard.jsx';
 import Chat from '../components/Chat.jsx';
-import PrivateRoom from '../components/PrivateRoom.jsx';
-
-const COMM_TABS = [
-  { id: 'chat', label: 'Chat', icon: 'chat' },
-  { id: 'room', label: 'Room', icon: 'room' },
-];
-
-function CommIcon({ type, className }) {
-  switch (type) {
-    case 'chat':
-      return (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-        </svg>
-      );
-    case 'room':
-      return (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 100-8 4 4 0 000 8z" />
-        </svg>
-      );
-    default:
-      return null;
-  }
-}
+import WatchPartyRoom from '../components/WatchPartyRoom.jsx';
 
 export default function WatchPage() {
   const [searchParams] = useSearchParams();
@@ -50,15 +26,12 @@ export default function WatchPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [relatedChannels, setRelatedChannels] = useState([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [fitToScreen, setFitToScreen] = useState(false); // contain vs cover
-  const [activeCommTab, setActiveCommTab] = useState('chat');
-  const [showComm, setShowComm] = useState(true);
+  const [fitToScreen, setFitToScreen] = useState(false);
   const username = getStoredUsername() || 'Guest';
-  const channelId = name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
 
   // Quality state
   const [availableLevels, setAvailableLevels] = useState([]);
-  const [currentLevel, setCurrentLevel] = useState(-1); // -1 = Auto
+  const [currentLevel, setCurrentLevel] = useState(-1);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
 
   // Volume state
@@ -68,6 +41,9 @@ export default function WatchPage() {
   // Controls visibility
   const [showControls, setShowControls] = useState(true);
   const hideTimer = useRef(null);
+
+  // Chat panel visibility
+  const [showChat, setShowChat] = useState(true);
 
   const resetHideTimer = useCallback(() => {
     setShowControls(true);
@@ -80,7 +56,7 @@ export default function WatchPage() {
     return () => clearTimeout(hideTimer.current);
   }, [resetHideTimer]);
 
-  // Load HLS stream with quality level detection
+  // Load HLS stream
   useEffect(() => {
     if (!url) return;
     const video = videoRef.current;
@@ -90,10 +66,7 @@ export default function WatchPage() {
     setAvailableLevels([]);
     setCurrentLevel(-1);
 
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
+    if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -106,9 +79,8 @@ export default function WatchPage() {
       hls.loadSource(url);
       hls.attachMedia(video);
 
-      hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setLoading(false);
-        // Extract available quality levels
         const levels = hls.levels.map((level, idx) => ({
           index: idx,
           height: level.height,
@@ -120,9 +92,7 @@ export default function WatchPage() {
         video.play().catch(() => {});
       });
 
-      hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
-        setCurrentLevel(data.level);
-      });
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_e, data) => { setCurrentLevel(data.level); });
 
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (data.fatal) {
@@ -133,18 +103,13 @@ export default function WatchPage() {
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = url;
-      video.addEventListener('loadeddata', () => {
-        setLoading(false);
-        video.play().catch(() => {});
-      }, { once: true });
+      video.addEventListener('loadeddata', () => { setLoading(false); video.play().catch(() => {}); }, { once: true });
     } else {
       setError('HLS playback is not supported in this browser.');
       setLoading(false);
     }
 
-    return () => {
-      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
-    };
+    return () => { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } };
   }, [url]);
 
   // Load related channels
@@ -168,10 +133,9 @@ export default function WatchPage() {
     return () => { video.removeEventListener('play', onPlay); video.removeEventListener('pause', onPause); };
   }, []);
 
-  // Quality switching function
   const switchQuality = (levelIndex) => {
     if (!hlsRef.current) return;
-    hlsRef.current.currentLevel = levelIndex; // -1 = auto
+    hlsRef.current.currentLevel = levelIndex;
     setCurrentLevel(levelIndex);
     setShowQualityMenu(false);
   };
@@ -183,31 +147,17 @@ export default function WatchPage() {
     else video.pause();
   };
 
-  // Detect coarse-pointer / phone-sized devices where orientation lock makes sense
   const isMobileDevice = () =>
     typeof window !== 'undefined' &&
     (window.matchMedia?.('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
 
   const lockLandscape = useCallback(async () => {
     if (!isMobileDevice()) return;
-    try {
-      // Screen Orientation API (Android/Chromium). iOS Safari does not support lock().
-      if (screen.orientation && typeof screen.orientation.lock === 'function') {
-        await screen.orientation.lock('landscape');
-      }
-    } catch {
-      /* lock may be rejected (e.g. iOS, not user-activated) — ignore gracefully */
-    }
+    try { if (screen.orientation?.lock) await screen.orientation.lock('landscape'); } catch {}
   }, []);
 
   const unlockOrientation = useCallback(() => {
-    try {
-      if (screen.orientation && typeof screen.orientation.unlock === 'function') {
-        screen.orientation.unlock();
-      }
-    } catch {
-      /* ignore */
-    }
+    try { if (screen.orientation?.unlock) screen.orientation.unlock(); } catch {}
   }, []);
 
   const toggleFullscreen = async () => {
@@ -215,56 +165,34 @@ export default function WatchPage() {
     if (!container) return;
     if (!document.fullscreenElement) {
       try {
-        // Prefer the standard API; fall back to WebKit for older iOS Safari.
-        if (container.requestFullscreen) {
-          await container.requestFullscreen();
-        } else if (container.webkitRequestFullscreen) {
-          container.webkitRequestFullscreen();
-        } else if (videoRef.current?.webkitEnterFullscreen) {
-          // iOS Safari only allows native video fullscreen; it auto-rotates by itself.
-          videoRef.current.webkitEnterFullscreen();
-        }
+        if (container.requestFullscreen) await container.requestFullscreen();
+        else if (container.webkitRequestFullscreen) container.webkitRequestFullscreen();
+        else if (videoRef.current?.webkitEnterFullscreen) videoRef.current.webkitEnterFullscreen();
         setIsFullscreen(true);
         await lockLandscape();
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     } else {
       try {
         if (document.exitFullscreen) await document.exitFullscreen();
         else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-      } catch {
-        /* ignore */
-      }
+      } catch {}
       unlockOrientation();
       setIsFullscreen(false);
     }
   };
 
-  const toggleFitToScreen = () => {
-    setFitToScreen(prev => !prev);
-  };
+  const toggleFitToScreen = () => setFitToScreen((prev) => !prev);
 
   const handleVolumeChange = (e) => {
     const v = parseFloat(e.target.value);
     setVolume(v);
-    if (videoRef.current) {
-      videoRef.current.volume = v;
-      videoRef.current.muted = v === 0;
-      setMuted(v === 0);
-    }
+    if (videoRef.current) { videoRef.current.volume = v; videoRef.current.muted = v === 0; setMuted(v === 0); }
   };
 
   const toggleMute = () => {
-    if (videoRef.current) {
-      const newMuted = !muted;
-      videoRef.current.muted = newMuted;
-      setMuted(newMuted);
-    }
+    if (videoRef.current) { const newMuted = !muted; videoRef.current.muted = newMuted; setMuted(newMuted); }
   };
 
-  // Fullscreen change listener — keep state in sync and unlock orientation
-  // when fullscreen is exited via the system back gesture / Escape key.
   useEffect(() => {
     const handler = () => {
       const fs = !!(document.fullscreenElement || document.webkitFullscreenElement);
@@ -276,7 +204,6 @@ export default function WatchPage() {
     return () => {
       document.removeEventListener('fullscreenchange', handler);
       document.removeEventListener('webkitfullscreenchange', handler);
-      // Safety: release any orientation lock when leaving the page.
       unlockOrientation();
     };
   }, [unlockOrientation]);
@@ -286,14 +213,14 @@ export default function WatchPage() {
     return (
       <div className="mx-auto max-w-7xl px-4 py-16 text-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 ring-1 ring-accent/20">
-            <svg className="h-7 w-7 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent-muted)] ring-1 ring-[var(--accent)]/20">
+            <svg className="h-7 w-7 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
           </div>
           <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">No Channel Selected</h2>
           <p className="text-sm text-[var(--text-muted)]">Choose a channel from the homepage to start watching.</p>
-          <Link to="/" className="mt-2 rounded-lg bg-accent px-4 py-2 text-sm font-bold text-black active:scale-95 transition-transform">
+          <Link to="/" className="mt-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white active:scale-95 transition-transform">
             Browse Channels
           </Link>
         </div>
@@ -301,16 +228,13 @@ export default function WatchPage() {
     );
   }
 
-  const currentQualityLabel = currentLevel === -1
-    ? 'Auto'
-    : availableLevels[currentLevel]?.label || 'Auto';
+  const currentQualityLabel = currentLevel === -1 ? 'Auto' : availableLevels[currentLevel]?.label || 'Auto';
 
   return (
     <div className="mx-auto max-w-[1600px] px-3 py-3 md:px-4 md:py-4">
-      {/* ── Desktop: Side-by-side | Mobile: Stacked ─────────────────────── */}
       <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
 
-        {/* ── Left Column: Video + Info + Communication (mobile) + Related ── */}
+        {/* ── Left Column: Video + Info + Watch Party + Related ── */}
         <div className="flex-1 min-w-0 space-y-3">
 
           {/* Video Player Container */}
@@ -339,8 +263,8 @@ export default function WatchPage() {
                   exit={{ opacity: 0 }}
                   className="absolute inset-0 flex items-center justify-center bg-black/80 z-20"
                 >
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="h-10 w-10 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="h-10 w-10 rounded-full border-2 border-[var(--accent)]/30 border-t-[var(--accent)] animate-spin" />
                     <span className="text-xs text-slate-400">Loading stream...</span>
                   </div>
                 </motion.div>
@@ -357,7 +281,7 @@ export default function WatchPage() {
                     </svg>
                   </div>
                   <p className="text-xs font-medium text-red-300">{error}</p>
-                  <Link to="/" className="rounded-lg bg-ink-700 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-ink-600">
+                  <Link to="/" className="rounded-lg bg-[var(--bg-tertiary)] px-3 py-1.5 text-xs font-bold text-white hover:bg-[var(--bg-secondary)]">
                     Try Another Channel
                   </Link>
                 </div>
@@ -372,12 +296,9 @@ export default function WatchPage() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   className="absolute bottom-0 left-0 right-0 z-10"
-                  onClick={e => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  {/* Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
-
-                  {/* Controls bar */}
                   <div className="relative flex items-center gap-2 px-3 py-2.5 md:px-4 md:py-3">
                     {/* Play/Pause */}
                     <button
@@ -415,13 +336,12 @@ export default function WatchPage() {
                       />
                     </div>
 
-                    {/* Spacer */}
                     <div className="flex-1" />
 
-                    {/* Quality Selector (WORKING) */}
+                    {/* Quality Selector */}
                     <div className="relative">
                       <button
-                        onClick={() => setShowQualityMenu(v => !v)}
+                        onClick={() => setShowQualityMenu((v) => !v)}
                         className="flex items-center gap-1 rounded-md bg-white/10 backdrop-blur-sm px-2 py-1 text-[10px] font-bold text-white hover:bg-white/20 transition-all active:scale-95"
                         title="Video Quality"
                       >
@@ -437,42 +357,38 @@ export default function WatchPage() {
                             initial={{ opacity: 0, y: 4 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 4 }}
-                            className="absolute bottom-full right-0 mb-1 rounded-lg border border-ink-500/50 bg-ink-800/95 backdrop-blur-md shadow-xl overflow-hidden min-w-[120px]"
+                            className="absolute bottom-full right-0 mb-1 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)]/95 backdrop-blur-md shadow-xl overflow-hidden min-w-[120px]"
                           >
-                            {/* Auto option */}
                             <button
                               onClick={() => switchQuality(-1)}
-                              className={`flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-semibold transition-colors hover:bg-ink-700 ${currentLevel === -1 ? 'text-accent' : 'text-white'}`}
+                              className={`flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-semibold transition-colors hover:bg-[var(--bg-tertiary)] ${currentLevel === -1 ? 'text-[var(--accent)]' : 'text-white'}`}
                             >
                               Auto
-                              {currentLevel === -1 && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                              {currentLevel === -1 && <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />}
                             </button>
-                            {/* Available levels */}
                             {availableLevels.map((level) => (
                               <button
                                 key={level.index}
                                 onClick={() => switchQuality(level.index)}
-                                className={`flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-semibold transition-colors hover:bg-ink-700 ${currentLevel === level.index ? 'text-accent' : 'text-white'}`}
+                                className={`flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-semibold transition-colors hover:bg-[var(--bg-tertiary)] ${currentLevel === level.index ? 'text-[var(--accent)]' : 'text-white'}`}
                               >
                                 {level.label}
-                                {currentLevel === level.index && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                                {currentLevel === level.index && <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />}
                               </button>
                             ))}
                             {availableLevels.length === 0 && (
-                              <div className="px-3 py-1.5 text-[9px] text-slate-500">
-                                Single quality stream
-                              </div>
+                              <div className="px-3 py-1.5 text-[9px] text-[var(--text-muted)]">Single quality stream</div>
                             )}
                           </motion.div>
                         )}
                       </AnimatePresence>
                     </div>
 
-                    {/* Fit to Screen toggle */}
+                    {/* Fit to Screen */}
                     <button
                       onClick={toggleFitToScreen}
-                      className={`flex h-7 w-7 items-center justify-center rounded-md backdrop-blur-sm transition-all active:scale-90 ${fitToScreen ? 'bg-accent/30 text-accent' : 'bg-white/10 text-white hover:bg-white/20'}`}
-                      title={fitToScreen ? 'Fit to screen (contain)' : 'Fill screen (cover)'}
+                      className={`flex h-7 w-7 items-center justify-center rounded-md backdrop-blur-sm transition-all active:scale-90 ${fitToScreen ? 'bg-[var(--accent)]/30 text-[var(--accent)]' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                      title={fitToScreen ? 'Fit to screen' : 'Fill screen'}
                     >
                       <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
@@ -534,20 +450,20 @@ export default function WatchPage() {
                     LIVE
                   </span>
                   {availableLevels.length > 0 && (
-                    <span className="text-[9px] text-[var(--text-muted)]">
-                      {currentQualityLabel} quality
-                    </span>
+                    <span className="text-[9px] text-[var(--text-muted)]">{currentQualityLabel} quality</span>
                   )}
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-1.5">
               <button
-                onClick={() => setShowComm(!showComm)}
+                onClick={() => setShowChat(!showChat)}
                 className="flex h-7 items-center gap-1 rounded-md border border-[var(--border-primary)] px-2 text-[10px] font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors active:scale-95 lg:hidden"
               >
-                <CommIcon type="chat" className="h-3 w-3" />
-                {showComm ? 'Hide' : 'Chat'}
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                {showChat ? 'Hide Chat' : 'Chat'}
               </button>
               <Link
                 to="/"
@@ -561,32 +477,40 @@ export default function WatchPage() {
             </div>
           </div>
 
-          {/* ── Communication Section (BELOW VIDEO on mobile, hidden on desktop) ── */}
-          <div className={`lg:hidden ${showComm ? 'block' : 'hidden'}`}>
-            <CommunicationPanel
-              activeTab={activeCommTab}
-              onTabChange={setActiveCommTab}
-              channelId={channelId}
-              username={username}
-            />
+          {/* ── Watch Party Room (10-user grid BELOW the stream) ── */}
+          <WatchPartyRoom />
+
+          {/* Chat section (mobile only) */}
+          <div className={`lg:hidden ${showChat ? 'block' : 'hidden'}`}>
+            <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden h-[50vh]">
+              <div className="flex items-center gap-2 border-b border-[var(--border-primary)] px-3 py-2.5 bg-[var(--bg-tertiary)]/50">
+                <svg className="h-4 w-4 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                <span className="text-xs font-bold text-[var(--text-primary)]">Live Chat</span>
+              </div>
+              <div className="h-[calc(100%-40px)]">
+                <Chat />
+              </div>
+            </div>
           </div>
 
           {/* Related Channels */}
           {relatedChannels.length > 0 && (
             <section className="space-y-2">
-              <h3 className="font-display text-xs font-bold text-[var(--text-primary)]">More Sports Channels</h3>
+              <h3 className="font-display text-sm font-bold text-[var(--text-primary)]">More Sports Channels</h3>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {relatedChannels.map((ch, i) => (
                   <Link
                     key={i}
                     to={`/watch?url=${encodeURIComponent(ch.url)}&name=${encodeURIComponent(ch.name)}&logo=${encodeURIComponent(ch.logo || '')}`}
-                    className="flex items-center gap-2 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-2 transition-all hover:border-accent/30 hover:bg-[var(--bg-tertiary)] active:scale-[0.98]"
+                    className="flex items-center gap-2 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-2 transition-all hover:border-[var(--accent)]/30 hover:bg-[var(--bg-tertiary)] active:scale-[0.98]"
                   >
                     <div className="flex h-8 w-10 shrink-0 items-center justify-center overflow-hidden rounded bg-[var(--bg-tertiary)]">
                       {ch.logo && ch.logo.startsWith('http') ? (
                         <img src={ch.logo} alt={ch.name} className="h-full w-full object-contain p-0.5" onError={(e) => { e.target.style.display = 'none'; }} />
                       ) : (
-                        <svg className="h-3 w-3 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="h-3 w-3 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                         </svg>
                       )}
@@ -605,56 +529,26 @@ export default function WatchPage() {
           )}
         </div>
 
-        {/* ── Right Column: Communication Panel (Desktop only) ──────────── */}
+        {/* ── Right Column: Chat Panel (Desktop only) ── */}
         <aside className="hidden lg:block w-[360px] shrink-0">
           <div className="sticky top-[100px]">
-            <CommunicationPanel
-              activeTab={activeCommTab}
-              onTabChange={setActiveCommTab}
-              channelId={channelId}
-              username={username}
-            />
+            <div className="flex flex-col rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden h-[calc(100vh-120px)]">
+              <div className="flex items-center gap-2 border-b border-[var(--border-primary)] px-3 py-2.5 bg-[var(--bg-tertiary)]/50">
+                <svg className="h-4 w-4 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                <span className="text-xs font-bold text-[var(--text-primary)]">Live Chat</span>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <Chat />
+              </div>
+            </div>
           </div>
         </aside>
       </div>
 
       {/* Bottom padding for mobile nav */}
       <div className="h-16 md:h-0" />
-    </div>
-  );
-}
-
-// ─── Communication Panel Component ──────────────────────────────────────────
-function CommunicationPanel({ activeTab, onTabChange, channelId, username }) {
-  return (
-    <div className="flex flex-col rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden h-[70vh] min-h-[440px] lg:h-[calc(100vh-120px)] lg:min-h-0">
-      {/* Tab Bar */}
-      <div className="flex border-b border-[var(--border-primary)] bg-[var(--bg-tertiary)]/50">
-        {COMM_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => onTabChange(tab.id)}
-            className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95 ${
-              activeTab === tab.id
-                ? 'text-accent bg-accent/5 border-b-2 border-accent'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-            }`}
-          >
-            <CommIcon type={tab.icon} className="h-3.5 w-3.5" />
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab Content (both mounted; toggle visibility to preserve room state) */}
-      <div className="flex-1 overflow-hidden">
-        <div className={`h-full ${activeTab === 'chat' ? 'block' : 'hidden'}`}>
-          <Chat />
-        </div>
-        <div className={`h-full ${activeTab === 'room' ? 'block' : 'hidden'}`}>
-          <PrivateRoom />
-        </div>
-      </div>
     </div>
   );
 }

@@ -41,7 +41,7 @@ export const config = {
   },
 
   maxParticipantsPerRoom: parseInt(
-    process.env.MAX_PARTICIPANTS_PER_ROOM || '8',
+    process.env.MAX_PARTICIPANTS_PER_ROOM || '10',
     10
   ),
 };

@@ -23,7 +23,7 @@ function MatchScore({ match }) {
   const label = statusLabel(match);
 
   return (
-    <div className="flex items-center gap-2 shrink-0 px-4 py-1 border-r border-ink-600/50">
+    <div className="flex items-center gap-2 shrink-0 px-4 py-1 border-r border-[var(--border-primary)]">
       <span
         className={`flex items-center gap-1 text-[9px] font-bold uppercase ${
           isLive ? 'text-red-400' : 'text-slate-500'
@@ -36,13 +36,13 @@ function MatchScore({ match }) {
         {match.home}
       </span>
       {isUpcoming ? (
-        <span className="text-xs font-extrabold px-1.5 py-0.5 rounded min-w-[36px] text-center bg-ink-700 text-slate-400">
+        <span className="text-xs font-extrabold px-1.5 py-0.5 rounded min-w-[36px] text-center bg-[var(--bg-tertiary)] text-slate-400">
           vs
         </span>
       ) : (
         <span
           className={`text-xs font-extrabold px-1.5 py-0.5 rounded min-w-[36px] text-center ${
-            isLive ? 'bg-red-500/10 text-red-400' : 'bg-ink-700 text-white'
+            isLive ? 'bg-red-500/10 text-red-400' : 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
           }`}
         >
           {match.homeScore} - {match.awayScore}
@@ -103,9 +103,9 @@ export default function LiveScoreTicker() {
   // Don't render the bar until we have real data
   if (!loaded || scores.length === 0) {
     return (
-      <div className="w-full bg-ink-950 border-b border-ink-700/50 overflow-hidden">
+      <div className="w-full bg-[var(--bg-primary)] border-b border-[var(--border-primary)] overflow-hidden">
         <div className="flex items-center">
-          <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-red-500/10 border-r border-ink-700/50">
+          <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-red-500/10 border-r border-[var(--border-primary)]">
             <span className="h-2 w-2 rounded-full bg-red-500 animate-pulseLive" />
             <span className="text-[10px] font-extrabold uppercase tracking-widest text-red-400 whitespace-nowrap">
               Live Scores
@@ -122,9 +122,9 @@ export default function LiveScoreTicker() {
   const doubled = [...scores, ...scores];
 
   return (
-    <div className="w-full bg-ink-950 border-b border-ink-700/50 overflow-hidden">
+    <div className="w-full bg-[var(--bg-primary)] border-b border-[var(--border-primary)] overflow-hidden">
       <div className="flex items-center">
-        <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-red-500/10 border-r border-ink-700/50">
+        <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-red-500/10 border-r border-[var(--border-primary)]">
           <span className="h-2 w-2 rounded-full bg-red-500 animate-pulseLive" />
           <span className="text-[10px] font-extrabold uppercase tracking-widest text-red-400 whitespace-nowrap">
             Live Scores

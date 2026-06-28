@@ -57,7 +57,7 @@ function WorldCupMatchCard({ match }) {
           ? 'border-red-500/40 bg-gradient-to-br from-red-500/10 to-yellow-500/5 shadow-lg shadow-red-500/10'
           : isUpcoming
           ? 'border-yellow-500/30 bg-gradient-to-br from-yellow-500/5 to-amber-500/5'
-          : 'border-ink-600/50 bg-ink-800/50'
+          : 'border-[var(--border-primary)] bg-[var(--bg-card)]'
       }`}
     >
       {/* Match header */}
@@ -109,7 +109,7 @@ function WorldCupMatchCard({ match }) {
         <div className="flex flex-col items-center gap-1 shrink-0">
           {!isUpcoming && match.homeScore !== null ? (
             <span className={`text-xl font-extrabold px-4 py-1.5 rounded-lg ${
-              isLive ? 'text-red-400 bg-red-500/10 ring-1 ring-red-500/20' : 'text-white bg-ink-700'
+              isLive ? 'text-red-400 bg-red-500/10 ring-1 ring-red-500/20' : 'text-[var(--text-primary)] bg-[var(--bg-tertiary)]'
             }`}>
               {match.homeScore} - {match.awayScore}
             </span>
@@ -139,7 +139,7 @@ function WorldCupMatchCard({ match }) {
 
 function SkeletonCard() {
   return (
-    <div className="rounded-xl border border-yellow-500/10 bg-ink-800/50 p-4">
+    <div className="rounded-xl border border-yellow-500/10 bg-[var(--bg-card)] p-4">
       <div className="mb-3 flex items-center justify-between">
         <div className="skeleton h-3 w-16 rounded" />
         <div className="skeleton h-4 w-14 rounded-full" />
@@ -256,7 +256,7 @@ export default function WorldCupSection() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-yellow-500/10 bg-ink-800/30 p-8 text-center">
+        <div className="rounded-xl border border-yellow-500/10 bg-[var(--bg-card)] p-8 text-center">
           <p className="text-sm text-[var(--text-muted)]">
             No {activeFilter !== 'all' ? activeFilter : ''} World Cup matches available right now.
           </p>

@@ -3,41 +3,47 @@
 @tailwind utilities;
 
 /* ============================================================
-   BGC Sports — Design System CSS Variables (FoxSports-inspired)
+   BGC Sports — Premium Design System
+   Clean, professional, sports broadcasting aesthetic
    ============================================================ */
 
 :root {
-  /* Dark mode (default) */
-  --bg-primary: #0a0e16;
-  --bg-secondary: #0f1521;
-  --bg-tertiary: #161e2e;
-  --bg-card: #0f1521;
-  --bg-card-hover: #161e2e;
-  --border-primary: #1e293b;
-  --border-secondary: #2a3a52;
-  --text-primary: #f1f5f9;
-  --text-secondary: #cbd5e1;
-  --text-muted: #64748b;
-  --accent-primary: #22c55e;
-  --accent-secondary: #f97316;
+  --bg-primary: #0B1120;
+  --bg-secondary: #0D1321;
+  --bg-tertiary: #131B2E;
+  --bg-card: #131B2E;
+  --bg-card-hover: #1A2540;
+  --border-primary: #1A2540;
+  --border-secondary: #243352;
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  --accent: #10B981;
+  --accent-light: #34D399;
+  --accent-dark: #059669;
+  --accent-muted: rgba(16, 185, 129, 0.15);
+  --live-red: #EF4444;
   --shadow-color: rgba(0, 0, 0, 0.4);
   color-scheme: dark;
 }
 
 .light {
-  --bg-primary: #f8fafc;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #f1f5f9;
-  --bg-card: #ffffff;
-  --bg-card-hover: #f1f5f9;
-  --border-primary: #e2e8f0;
-  --border-secondary: #cbd5e1;
-  --text-primary: #0f172a;
+  --bg-primary: #F8FAFC;
+  --bg-secondary: #FFFFFF;
+  --bg-tertiary: #F1F5F9;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F1F5F9;
+  --border-primary: #E2E8F0;
+  --border-secondary: #CBD5E1;
+  --text-primary: #0F172A;
   --text-secondary: #475569;
-  --text-muted: #94a3b8;
-  --accent-primary: #16a34a;
-  --accent-secondary: #ea580c;
-  --shadow-color: rgba(0, 0, 0, 0.1);
+  --text-muted: #94A3B8;
+  --accent: #059669;
+  --accent-light: #10B981;
+  --accent-dark: #047857;
+  --accent-muted: rgba(5, 150, 105, 0.1);
+  --live-red: #DC2626;
+  --shadow-color: rgba(0, 0, 0, 0.08);
   color-scheme: light;
 }
 
@@ -51,14 +57,14 @@ body {
   margin: 0;
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* ============================================================
-   Custom Scrollbar
+   Scrollbar
    ============================================================ */
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
@@ -76,21 +82,8 @@ body {
 }
 
 /* ============================================================
-   Utility Classes
+   Skeleton Loading
    ============================================================ */
-
-/* Glass morphism card effect */
-.glass-card {
-  background: rgba(15, 21, 33, 0.8);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(30, 41, 59, 0.5);
-}
-.light .glass-card {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-}
-
-/* Skeleton loading animation */
 .skeleton {
   background: linear-gradient(
     90deg,
@@ -102,160 +95,32 @@ body {
   animation: shimmer 2s linear infinite;
 }
 
-/* Glow effects on hover */
-.glow-green-hover:hover {
-  box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
-}
-.glow-orange-hover:hover {
-  box-shadow: 0 0 20px rgba(249, 115, 22, 0.3);
-}
-
-/* Button base styles */
-.btn-primary {
-  @apply rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-black transition-all duration-200 hover:bg-accent-dark hover:shadow-glow-green active:scale-[0.98];
-}
-.btn-secondary {
-  @apply rounded-xl bg-secondary px-4 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-secondary-dark hover:shadow-glow-orange active:scale-[0.98];
-}
-.btn-ghost {
-  @apply rounded-xl border border-ink-600 px-4 py-2.5 text-sm font-medium text-slate-300 transition-all duration-200 hover:border-ink-400 hover:bg-ink-700 active:scale-[0.98];
-}
-
-/* Card base styles */
-.card {
-  @apply rounded-2xl border border-ink-600 bg-ink-800 p-5 shadow-card transition-all duration-200;
-}
-.card:hover {
-  @apply border-ink-500 shadow-card-hover;
-}
-
-/* Input base styles */
-.input-field {
-  @apply w-full rounded-xl border border-ink-500 bg-ink-900 px-4 py-2.5 text-sm text-white outline-none transition-all duration-200 placeholder:text-slate-500 focus:border-accent focus:ring-1 focus:ring-accent/30;
-}
-
-/* Toast notification */
-.toast {
-  @apply fixed left-1/2 top-6 z-50 -translate-x-1/2 rounded-xl border border-ink-600 bg-ink-800 px-5 py-3 text-sm font-medium text-white shadow-lg animate-toast;
-}
-
-/* Channel grid animations */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fadeInUp {
-  animation: fadeInUp 0.4s ease-out forwards;
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
 /* ============================================================
-   BGC Sports — Enhanced Animations & Theme (v2)
+   Hero Section
    ============================================================ */
-
-/* Hero animated gradient background */
-@keyframes heroGradient {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-.hero-animated-bg {
+.hero-bg {
   background: linear-gradient(
     135deg,
-    #020b06 0%,
-    #051a0f 20%,
-    #0a0e16 40%,
-    #060d1a 60%,
-    #0a1a0a 80%,
-    #020b06 100%
+    rgba(11, 17, 32, 0.95) 0%,
+    rgba(13, 19, 33, 0.85) 50%,
+    rgba(11, 17, 32, 0.9) 100%
   );
-  background-size: 400% 400%;
-  animation: heroGradient 10s ease infinite;
 }
 
 .hero-gradient-text {
-  background-image: linear-gradient(90deg, #10B981, #34d399, #F59E0B);
-}
-
-.hero-cta-btn {
-  background: linear-gradient(135deg, #10B981, #F59E0B);
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
-  transition: all 0.3s ease;
-}
-.hero-cta-btn:hover {
-  box-shadow: 0 0 30px rgba(16, 185, 129, 0.6);
-  transform: translateY(-1px);
-}
-
-@keyframes neonPulse {
-  0%, 100% { box-shadow: 0 0 8px rgba(239,68,68,0.4), 0 0 16px rgba(239,68,68,0.2); }
-  50% { box-shadow: 0 0 16px rgba(239,68,68,0.7), 0 0 32px rgba(239,68,68,0.4); }
-}
-
-.live-now-badge {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  animation: neonPulse 1.5s ease-in-out infinite;
-}
-
-.channel-card-glow {
-  background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(245,158,11,0.15));
-  box-shadow: 0 0 0 1px rgba(16,185,129,0.3), 0 8px 24px rgba(16,185,129,0.15);
-}
-
-.channel-card:hover {
-  box-shadow: 0 0 0 1px rgba(16,185,129,0.3), 0 8px 32px rgba(16,185,129,0.15);
-}
-
-.light .hero-animated-bg {
-  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 20%, #f8fafc 40%, #eff6ff 60%, #f0fdf4 80%, #f8fafc 100%);
-  background-size: 400% 400%;
-  animation: heroGradient 10s ease infinite;
-}
-
-.light .hero-gradient-text {
-  background-image: linear-gradient(90deg, #059669, #10B981, #D97706);
-}
-
-:root {
-  --emerald: #10B981;
-  --gold: #F59E0B;
-  --emerald-glow: rgba(16,185,129,0.3);
-  --gold-glow: rgba(245,158,11,0.3);
-}
-
-.glass-nav {
-  background: rgba(10, 14, 22, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(30, 41, 59, 0.5);
-}
-
-.light .glass-nav {
-  background: rgba(248, 250, 252, 0.8);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
-}
-
-@supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .mobile-bottom-nav {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
+  background-image: linear-gradient(135deg, #10B981, #34D399);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 /* ============================================================
-   Video Player — Fullscreen & Fit-to-screen behaviour
-   ------------------------------------------------------------
-   In fullscreen, force the player container to truly fill the
-   screen so the "Fill screen (cover)" toggle (object-cover) has
-   a visible effect in landscape orientation. Without this, some
-   browsers leave a flex/aspect-ratio box that doesn't stretch.
+   Video Player
    ============================================================ */
 .player-container:fullscreen,
 .player-container:-webkit-full-screen {
@@ -270,17 +135,12 @@ body {
   justify-content: center;
 }
 
-/* The video should occupy the entire fullscreen area; object-fit
-   (cover/contain) then controls how the frame fills it. */
 .player-container:fullscreen .player-video,
 .player-container:-webkit-full-screen .player-video {
   width: 100%;
   height: 100%;
 }
 
-/* Some Android Chromium builds report fullscreen but keep the
-   aspect-ratio box; the JS-driven .is-fullscreen class guarantees
-   the container fills the viewport regardless of vendor quirks. */
 .player-container.is-fullscreen {
   position: fixed;
   inset: 0;
@@ -288,4 +148,39 @@ body {
   height: 100vh;
   z-index: 9999;
   border-radius: 0;
+}
+
+/* ============================================================
+   Watch Party — Speaking Indicator
+   ============================================================ */
+.speaking-border {
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+}
+
+/* ============================================================
+   Mobile Safe Area
+   ============================================================ */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ============================================================
+   Animations
+   ============================================================ */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 0.3s ease-out forwards;
 }
