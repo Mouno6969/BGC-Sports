@@ -28,9 +28,25 @@ const ICE_SERVERS = [
 ];
 
 // ---------------------------------------------------------------------------
+// gridColumns — pick the number of columns that keeps the participant grid as
+// close to square as possible so EVERY tile is visible on one page. As more
+// people join, the column count grows (and therefore each tile shrinks),
+// instead of stacking vertically and overflowing.
+//   1 → 1 col | 2 → 2 | 3-4 → 2 | 5-9 → 3 | 10-16 → 4 | 17+ → 5 (capped)
+// ---------------------------------------------------------------------------
+function gridColumns(count) {
+  if (count <= 1) return 1;
+  if (count === 2) return 2;
+  if (count <= 4) return 2;
+  if (count <= 9) return 3;
+  if (count <= 16) return 4;
+  return 5;
+}
+
+// ---------------------------------------------------------------------------
 // CallTile — one participant video/avatar tile.
 // ---------------------------------------------------------------------------
-function CallTile({ stream, username, isLocal, mode, micMuted, camOff }) {
+function CallTile({ stream, username, isLocal, mode, micMuted, camOff, compact = false }) {
   const mediaRef = useRef(null);
   useEffect(() => {
     if (mediaRef.current && stream) mediaRef.current.srcObject = stream;
@@ -40,22 +56,22 @@ function CallTile({ stream, username, isLocal, mode, micMuted, camOff }) {
   const initial = (username || 'U').charAt(0).toUpperCase();
 
   return (
-    <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg bg-ink-700/50 ring-1 ring-ink-600/50">
+    <div className="relative flex h-full w-full min-h-0 items-center justify-center overflow-hidden rounded-lg bg-ink-700/50 ring-1 ring-ink-600/50">
       {showVideo ? (
         <video ref={mediaRef} className="h-full w-full object-cover" autoPlay playsInline muted={isLocal} />
       ) : (
         <div className="flex flex-col items-center gap-1">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-accent/20 to-secondary/20 text-sm font-bold text-white ring-2 ring-ink-500">
+          <div className={`flex items-center justify-center rounded-full bg-gradient-to-br from-accent/20 to-secondary/20 font-bold text-white ring-2 ring-ink-500 ${compact ? 'h-7 w-7 text-xs' : 'h-10 w-10 text-sm'}`}>
             {initial}
           </div>
           {stream && <audio ref={mediaRef} autoPlay muted={isLocal} className="hidden" />}
         </div>
       )}
-      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4">
-        <span className="truncate text-[10px] font-medium text-white/90">
+      <div className={`absolute bottom-0 left-0 right-0 flex items-center justify-between bg-gradient-to-t from-black/80 to-transparent px-1.5 pb-1 pt-3 ${compact ? '' : 'px-2 pb-1.5 pt-4'}`}>
+        <span className={`truncate font-medium text-white/90 ${compact ? 'text-[8px]' : 'text-[10px]'}`}>
           {isLocal ? `${username} (you)` : username}
         </span>
-        <span className={`flex h-4 w-4 items-center justify-center rounded-full ${micMuted ? 'bg-red-500/80' : 'bg-ink-600/80'}`}>
+        <span className={`flex shrink-0 items-center justify-center rounded-full ${compact ? 'h-3 w-3' : 'h-4 w-4'} ${micMuted ? 'bg-red-500/80' : 'bg-ink-600/80'}`}>
           {micMuted ? (
             <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
@@ -556,14 +572,38 @@ export default function PrivateRoom() {
                   {callParticipants.length} in call
                 </span>
               </div>
-              <div className={`grid gap-1.5 ${callParticipants.length <= 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-                {myCallParticipant && (
-                  <CallTile stream={localStreamRef.current} username={username} isLocal mode={callMode} micMuted={micMuted} camOff={camOff} />
-                )}
-                {otherCallParticipants.map((p) => (
-                  <CallTile key={p.id} stream={remoteStreams.get(p.id)} username={p.username} isLocal={false} mode={p.mode} micMuted={p.micMuted} camOff={p.camOff} />
-                ))}
-              </div>
+              {/* Adaptive participant grid: columns grow (and tiles shrink) as
+                  more people join, so everyone stays visible on one page. The
+                  container height is capped and rows auto-fit, so tiles scale
+                  down to fit instead of overflowing vertically. */}
+              {(() => {
+                const totalTiles = (myCallParticipant ? 1 : 0) + otherCallParticipants.length;
+                const cols = gridColumns(totalTiles);
+                const rows = Math.max(1, Math.ceil(totalTiles / cols));
+                const compact = totalTiles >= 5;
+                return (
+                  <div
+                    className="grid w-full gap-1.5"
+                    style={{
+                      gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+                      gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+                      // Cap the call area so it never pushes the rest of the
+                      // page off-screen; tiles shrink within this box.
+                      maxHeight: 'min(48vh, 460px)',
+                      // Keep tiles roughly 16:9 while small, but let them fill
+                      // the available rows when the grid is tall.
+                      aspectRatio: rows >= cols ? undefined : `${cols * 16} / ${rows * 9}`,
+                    }}
+                  >
+                    {myCallParticipant && (
+                      <CallTile stream={localStreamRef.current} username={username} isLocal mode={callMode} micMuted={micMuted} camOff={camOff} compact={compact} />
+                    )}
+                    {otherCallParticipants.map((p) => (
+                      <CallTile key={p.id} stream={remoteStreams.get(p.id)} username={p.username} isLocal={false} mode={p.mode} micMuted={p.micMuted} camOff={p.camOff} compact={compact} />
+                    ))}
+                  </div>
+                );
+              })()}
               {otherCallParticipants.length === 0 && (
                 <p className="text-center text-[10px] italic text-[var(--text-muted)]">Waiting for others to join the call…</p>
               )}
