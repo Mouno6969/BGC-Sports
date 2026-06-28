@@ -25,6 +25,7 @@ export default function WatchPage() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [streamHeaders, setStreamHeaders] = useState(null);
   const [relatedChannels, setRelatedChannels] = useState([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fitToScreen, setFitToScreen] = useState(false);
@@ -58,6 +59,20 @@ export default function WatchPage() {
     return () => clearTimeout(hideTimer.current);
   }, [resetHideTimer]);
 
+    // Fetch stream headers if it's a Toffee stream
+  useEffect(() => {
+    if (!url) return;
+    setStreamHeaders(null);
+    apiGet('/api/channels')
+      .then((res) => {
+        const channel = res.channels?.find((ch) => ch.url === url);
+        if (channel?.headers) {
+          setStreamHeaders(channel.headers);
+        }
+      })
+      .catch(() => {});
+  }, [url]);
+
   // Load HLS stream
   useEffect(() => {
     if (!url) return;
@@ -71,12 +86,24 @@ export default function WatchPage() {
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
     if (Hls.isSupported()) {
-      const hls = new Hls({
+      const hlsConfig = {
         lowLatencyMode: true,
         enableWorker: true,
         maxBufferSize: 30 * 1024 * 1024,
         maxBufferLength: 30,
-      });
+      };
+
+      if (streamHeaders) {
+        hlsConfig.xhrSetup = (xhr) => {
+          Object.entries(streamHeaders).forEach(([key, value]) => {
+            if (key.toLowerCase() !== 'host') {
+              xhr.setRequestHeader(key, value);
+            }
+          });
+        };
+      }
+
+      const hls = new Hls(hlsConfig);
       hlsRef.current = hls;
       hls.loadSource(url);
       hls.attachMedia(video);
@@ -111,8 +138,13 @@ export default function WatchPage() {
       setLoading(false);
     }
 
-    return () => { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } };
-  }, [url]);
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [url, streamHeaders]);
 
   // Load related channels
   useEffect(() => {

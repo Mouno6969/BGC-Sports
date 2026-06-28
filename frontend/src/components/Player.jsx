@@ -55,7 +55,24 @@ export default function Player({
     }
 
     if (Hls.isSupported()) {
-      const hls = new Hls({ lowLatencyMode: true, enableWorker: true });
+      // Pass custom headers if provided (needed for Toffee streams)
+      const hlsConfig = { 
+        lowLatencyMode: true, 
+        enableWorker: true,
+      };
+      
+      if (stream.headers) {
+        hlsConfig.xhrSetup = (xhr, url) => {
+          Object.entries(stream.headers).forEach(([key, value]) => {
+            // Skip Host header as it's usually forbidden to set manually in browsers
+            if (key.toLowerCase() !== 'host') {
+              xhr.setRequestHeader(key, value);
+            }
+          });
+        };
+      }
+
+      const hls = new Hls(hlsConfig);
       hlsRef.current = hls;
       hls.loadSource(url);
       hls.attachMedia(video);

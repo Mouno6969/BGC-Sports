@@ -16,6 +16,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { filterDead, reportDead, getDeadCount, getDeadUrls, startHealthCheckLoop } from '../utils/healthCheck.js';
 import { requireAdmin } from './admin.js';
+import { fetchToffeeChannels } from '../utils/toffee.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -37,8 +38,10 @@ startHealthCheckLoop(() => channels);
 
 // GET /api/channels — return all channels, optionally filtered by group or search
 // Dead channels are automatically excluded.
-router.get('/', (req, res) => {
-  let result = filterDead(channels);
+router.get('/', async (req, res) => {
+  const toffee = await fetchToffeeChannels();
+  const allChannels = [...channels, ...toffee];
+  let result = filterDead(allChannels);
   const { group, search, limit } = req.query;
 
   if (group && group !== 'all') {
