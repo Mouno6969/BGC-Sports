@@ -45,8 +45,9 @@ function gridColumns(count) {
 
 // ---------------------------------------------------------------------------
 // CallTile — one participant video/avatar tile.
+// Now supports `speaking` prop for active-speaker highlight.
 // ---------------------------------------------------------------------------
-function CallTile({ stream, username, isLocal, mode, micMuted, camOff, compact = false }) {
+function CallTile({ stream, username, isLocal, mode, micMuted, camOff, compact = false, speaking = false }) {
   const mediaRef = useRef(null);
   useEffect(() => {
     if (mediaRef.current && stream) mediaRef.current.srcObject = stream;
@@ -56,7 +57,7 @@ function CallTile({ stream, username, isLocal, mode, micMuted, camOff, compact =
   const initial = (username || 'U').charAt(0).toUpperCase();
 
   return (
-    <div className="relative flex h-full w-full min-h-0 items-center justify-center overflow-hidden rounded-lg bg-ink-700/50 ring-1 ring-ink-600/50">
+    <div className={`relative flex h-full w-full min-h-0 items-center justify-center overflow-hidden rounded-lg bg-ink-700/50 transition-all duration-200 ${speaking ? 'ring-2 ring-accent shadow-[0_0_12px_rgba(34,197,94,0.4)]' : 'ring-1 ring-ink-600/50'}`}>
       {showVideo ? (
         <video ref={mediaRef} className="h-full w-full object-cover" autoPlay playsInline muted={isLocal} />
       ) : (
@@ -65,6 +66,16 @@ function CallTile({ stream, username, isLocal, mode, micMuted, camOff, compact =
             {initial}
           </div>
           {stream && <audio ref={mediaRef} autoPlay muted={isLocal} className="hidden" />}
+        </div>
+      )}
+      {/* Speaking indicator */}
+      {speaking && (
+        <div className="absolute top-1.5 right-1.5 flex items-center gap-1 rounded-full bg-accent/90 px-1.5 py-0.5">
+          <span className="flex gap-[2px]">
+            <span className="h-2 w-[2px] animate-pulse rounded-full bg-white" style={{ animationDelay: '0ms' }} />
+            <span className="h-2.5 w-[2px] animate-pulse rounded-full bg-white" style={{ animationDelay: '150ms' }} />
+            <span className="h-1.5 w-[2px] animate-pulse rounded-full bg-white" style={{ animationDelay: '300ms' }} />
+          </span>
         </div>
       )}
       <div className={`absolute bottom-0 left-0 right-0 flex items-center justify-between bg-gradient-to-t from-black/80 to-transparent px-1.5 pb-1 pt-3 ${compact ? '' : 'px-2 pb-1.5 pt-4'}`}>
@@ -124,6 +135,134 @@ export default function PrivateRoom() {
 
   const isHost = hostId === socket.id;
   const mySocketId = socket.id;
+
+  // =========================================================================
+  // ACTIVE-SPEAKER DETECTION (Web Audio API)
+  // =========================================================================
+  // We monitor every audio stream (local + each remote) using AnalyserNode.
+  // A single requestAnimationFrame loop checks levels, applies smoothing +
+  // hangover, and updates `speakingIds` state so CallTile can highlight.
+  // =========================================================================
+  const [speakingIds, setSpeakingIds] = useState(new Set());
+
+  // Map of id -> { audioCtx, analyser, source, dataArray, smoothedLevel, hangover }
+  const monitorsRef = useRef(new Map());
+  const rafIdRef = useRef(null);
+
+  // Threshold: RMS level (0-1) above which we consider someone "speaking"
+  const SPEAK_THRESHOLD = 0.015;
+  // Hangover frames: keep "speaking" for this many RAF ticks after level drops
+  const HANGOVER_FRAMES = 12; // ~200ms at 60fps
+
+  /**
+   * Start monitoring an audio stream for a given participant ID.
+   * Works for both local mic stream and remote peer streams.
+   */
+  function monitorStream(id, stream) {
+    // Don't double-monitor
+    if (monitorsRef.current.has(id)) return;
+    // Need at least one audio track
+    if (!stream || stream.getAudioTracks().length === 0) return;
+
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.5;
+      source.connect(analyser);
+      // Do NOT connect analyser to destination (we don't want to hear ourselves twice)
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      monitorsRef.current.set(id, {
+        audioCtx,
+        analyser,
+        source,
+        dataArray,
+        smoothedLevel: 0,
+        hangover: 0,
+      });
+    } catch (err) {
+      console.warn('[proom] Failed to create audio monitor for', id, err);
+    }
+  }
+
+  /**
+   * Stop monitoring a participant's stream.
+   */
+  function stopMonitor(id) {
+    const monitor = monitorsRef.current.get(id);
+    if (!monitor) return;
+    try {
+      monitor.source.disconnect();
+      monitor.audioCtx.close();
+    } catch (_) { /* ignore */ }
+    monitorsRef.current.delete(id);
+  }
+
+  /**
+   * Stop all monitors and cancel the RAF loop.
+   */
+  function stopAllMonitors() {
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    monitorsRef.current.forEach((_, id) => stopMonitor(id));
+    monitorsRef.current.clear();
+    setSpeakingIds(new Set());
+  }
+
+  /**
+   * The detection loop — runs every animation frame while in a call.
+   * Computes RMS for each monitored stream, applies exponential smoothing,
+   * and updates speakingIds with hangover to avoid flicker.
+   */
+  function startDetectionLoop() {
+    function tick() {
+      const newSpeaking = new Set();
+
+      monitorsRef.current.forEach((monitor, id) => {
+        const { analyser, dataArray } = monitor;
+        analyser.getByteTimeDomainData(dataArray);
+
+        // Compute RMS
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          const normalized = (dataArray[i] - 128) / 128; // -1 to 1
+          sum += normalized * normalized;
+        }
+        const rms = Math.sqrt(sum / dataArray.length);
+
+        // Exponential smoothing
+        const alpha = 0.3;
+        monitor.smoothedLevel = alpha * rms + (1 - alpha) * monitor.smoothedLevel;
+
+        // Threshold + hangover
+        if (monitor.smoothedLevel > SPEAK_THRESHOLD) {
+          monitor.hangover = HANGOVER_FRAMES;
+          newSpeaking.add(id);
+        } else if (monitor.hangover > 0) {
+          monitor.hangover--;
+          newSpeaking.add(id);
+        }
+      });
+
+      // Only update state if the set actually changed
+      setSpeakingIds((prev) => {
+        if (prev.size !== newSpeaking.size) return newSpeaking;
+        for (const id of newSpeaking) {
+          if (!prev.has(id)) return newSpeaking;
+        }
+        return prev;
+      });
+
+      rafIdRef.current = requestAnimationFrame(tick);
+    }
+
+    rafIdRef.current = requestAnimationFrame(tick);
+  }
 
   // ================= ROOM lifecycle socket listeners =====================
   useEffect(() => {
@@ -194,6 +333,7 @@ export default function PrivateRoom() {
   // Leave the room when the component unmounts (tab switch / navigation).
   useEffect(() => {
     return () => {
+      stopAllMonitors();
       teardownCall();
       socket.emit('proom:leave');
     };
@@ -204,6 +344,23 @@ export default function PrivateRoom() {
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages]);
+
+  // ---- Monitor remote streams as they arrive/leave ----
+  useEffect(() => {
+    // Start monitors for any new remote streams
+    remoteStreams.forEach((stream, peerId) => {
+      if (!monitorsRef.current.has(peerId) && stream) {
+        monitorStream(peerId, stream);
+      }
+    });
+    // Stop monitors for peers that left
+    monitorsRef.current.forEach((_, id) => {
+      if (id !== 'local' && !remoteStreams.has(id)) {
+        stopMonitor(id);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remoteStreams]);
 
   // ===================== CALL: peer connection logic ======================
   const createPeerConnection = useCallback((peerId, isInitiator) => {
@@ -336,6 +493,9 @@ export default function PrivateRoom() {
   }
 
   function teardownCall() {
+    // Stop all audio monitors and the detection loop
+    stopAllMonitors();
+
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
@@ -389,6 +549,11 @@ export default function PrivateRoom() {
       inCallRef.current = true;
       setCamOff(mode === 'audio');
       socket.emit('proom:call-join', { mode });
+
+      // Start monitoring local mic for active-speaker detection
+      monitorStream('local', stream);
+      // Start the RAF detection loop
+      startDetectionLoop();
     } catch (err) {
       console.error('[proom] getUserMedia', err);
       setCallError('Could not access camera/microphone. Check permissions.');
@@ -439,6 +604,18 @@ export default function PrivateRoom() {
   }
 
   // ============================== RENDER =================================
+
+  // Helper: check if a participant is currently speaking
+  // For local user, we use 'local' as the monitor key
+  // For remote users, we use their socket id
+  function isSpeaking(participantId, isMuted) {
+    // A muted person should never show as speaking
+    if (isMuted) return false;
+    if (participantId === mySocketId) {
+      return speakingIds.has('local') && !micMuted;
+    }
+    return speakingIds.has(participantId);
+  }
 
   // ---------- Lobby (not in a room) ----------
   if (!room) {
@@ -596,10 +773,29 @@ export default function PrivateRoom() {
                     }}
                   >
                     {myCallParticipant && (
-                      <CallTile stream={localStreamRef.current} username={username} isLocal mode={callMode} micMuted={micMuted} camOff={camOff} compact={compact} />
+                      <CallTile
+                        stream={localStreamRef.current}
+                        username={username}
+                        isLocal
+                        mode={callMode}
+                        micMuted={micMuted}
+                        camOff={camOff}
+                        compact={compact}
+                        speaking={isSpeaking(mySocketId, micMuted)}
+                      />
                     )}
                     {otherCallParticipants.map((p) => (
-                      <CallTile key={p.id} stream={remoteStreams.get(p.id)} username={p.username} isLocal={false} mode={p.mode} micMuted={p.micMuted} camOff={p.camOff} compact={compact} />
+                      <CallTile
+                        key={p.id}
+                        stream={remoteStreams.get(p.id)}
+                        username={p.username}
+                        isLocal={false}
+                        mode={p.mode}
+                        micMuted={p.micMuted}
+                        camOff={p.camOff}
+                        compact={compact}
+                        speaking={isSpeaking(p.id, p.micMuted)}
+                      />
                     ))}
                   </div>
                 );
