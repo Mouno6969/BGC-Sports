@@ -125,7 +125,7 @@ export default function HomePage() {
       {/* ── Hero Section — Tall, prominent, stadium background ──────── */}
       <section className="relative overflow-hidden rounded-2xl min-h-[280px] md:min-h-[360px] flex items-center">
         {/* Stadium Background Image */}
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=1400&q=80')] bg-cover bg-center" />
+        <div className="absolute inset-0 bg-[url('/stadium-bg.jpg')] bg-cover bg-center" />
         {/* Dark overlay gradient */}
         <div className="absolute inset-0 bg-gradient-to-r from-[var(--bg-primary)]/95 via-[var(--bg-primary)]/70 to-[var(--bg-primary)]/40" />
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-primary)]/80 to-transparent" />
