@@ -111,7 +111,7 @@ export default function HomePage() {
     return (
       <div className="mx-auto max-w-7xl px-4 lg:px-6 py-8 space-y-8">
         <div className="skeleton rounded-2xl h-64 w-full" />
-        <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-5 sm:grid-cols-3 md:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
@@ -121,39 +121,39 @@ export default function HomePage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 lg:px-6 py-6 space-y-10">
+    <div className="mx-auto max-w-7xl px-4 lg:px-6 py-6 space-y-7 sm:space-y-10">
       {/* ── Hero Section — Tall, prominent, stadium background ──────── */}
-      <section className="relative overflow-hidden rounded-2xl min-h-[280px] md:min-h-[360px] flex items-center">
+      <section className="relative overflow-hidden rounded-2xl min-h-[220px] sm:min-h-[280px] md:min-h-[360px] flex items-center">
         {/* Stadium Background Image */}
         <div className="absolute inset-0 bg-[url('/stadium-bg.jpg')] bg-cover bg-center" />
         {/* Dark overlay gradient */}
         <div className="absolute inset-0 bg-gradient-to-r from-[var(--bg-primary)]/95 via-[var(--bg-primary)]/70 to-[var(--bg-primary)]/40" />
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-primary)]/80 to-transparent" />
 
-        <div className="relative z-10 px-8 py-14 md:py-20 md:px-14">
+        <div className="relative z-10 px-5 py-10 sm:px-8 sm:py-14 md:py-20 md:px-14">
           <div className="max-w-xl">
-            <h1 className="font-display text-4xl font-extrabold text-[var(--text-primary)] md:text-5xl lg:text-6xl leading-[1.1]">
+            <h1 className="font-display text-2xl font-extrabold text-[var(--text-primary)] sm:text-4xl md:text-5xl lg:text-6xl leading-[1.1]">
               Live Sports{' '}
               <span className="hero-gradient-text">Streaming</span>
             </h1>
-            <p className="mt-4 text-lg text-[var(--text-secondary)] max-w-md">
+            <p className="mt-3 text-sm text-[var(--text-secondary)] max-w-md sm:mt-4 sm:text-lg">
               Your home for live sports, anytime, anywhere.
             </p>
-            <div className="mt-8 flex items-center gap-4">
+            <div className="mt-5 flex flex-wrap items-center gap-3 sm:mt-8 sm:gap-4">
               <Link
                 to="/category/Sports"
-                className="inline-flex items-center gap-2.5 rounded-xl bg-[var(--accent)] px-7 py-3.5 text-base font-bold text-white transition-all hover:bg-[var(--accent-dark)] active:scale-[0.97] shadow-lg shadow-[var(--accent)]/20"
+                className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-[var(--accent-dark)] active:scale-[0.97] shadow-lg shadow-[var(--accent)]/20 sm:gap-2.5 sm:px-7 sm:py-3.5 sm:text-base"
               >
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M8 5v14l11-7z" />
                 </svg>
                 Watch Sports
               </Link>
               <Link
                 to="/category/Live"
-                className="inline-flex items-center gap-2.5 rounded-xl border-2 border-red-500/40 bg-red-500/10 px-7 py-3.5 text-base font-bold text-red-400 transition-all hover:bg-red-500/20 active:scale-[0.97]"
+                className="inline-flex items-center gap-2 rounded-xl border-2 border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm font-bold text-red-400 transition-all hover:bg-red-500/20 active:scale-[0.97] sm:gap-2.5 sm:px-7 sm:py-3.5 sm:text-base"
               >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
                 Live TV
@@ -163,14 +163,14 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Category Filter Pills — Centered, clean ────────────────── */}
-      <div className="flex justify-center">
-        <div className="inline-flex items-center gap-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-3">
+      {/* ── Category Filter Pills — Scrollable on mobile, centered on desktop ─── */}
+      <div className="-mx-4 px-4 sm:mx-0 sm:px-0 sm:flex sm:justify-center">
+        <div className="flex items-center gap-2 overflow-x-auto rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-2.5 py-2.5 no-scrollbar sm:inline-flex sm:gap-3 sm:overflow-visible sm:px-4 sm:py-3">
           {PRIMARY_CATEGORIES.map((cat) => (
             <button
               key={cat}
               onClick={() => setActiveGroup(cat)}
-              className={`rounded-full px-5 py-2 text-sm font-semibold transition-all ${
+              className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all sm:px-5 sm:py-2 sm:text-sm ${
                 activeGroup === cat
                   ? 'bg-[var(--accent)] text-white shadow-md shadow-[var(--accent)]/20'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
@@ -183,12 +183,12 @@ export default function HomePage() {
       </div>
 
       {/* ── Main Tab Navigation ──────────────────────────────────────── */}
-      <div className="flex items-center gap-1 border-b border-[var(--border-primary)]">
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-[var(--border-primary)] no-scrollbar">
         {MAIN_TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`relative px-5 py-3 text-sm font-semibold transition-colors ${
+            className={`relative shrink-0 whitespace-nowrap px-3.5 py-2.5 text-sm font-semibold transition-colors sm:px-5 sm:py-3 ${
               activeTab === tab.id
                 ? 'text-[var(--accent)]'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -244,10 +244,10 @@ export default function HomePage() {
           {/* Featured Section */}
           {activeGroup === 'All' && !search && featured.length > 0 && (
             <section>
-              <h2 className="mb-5 font-display text-xl font-bold text-[var(--text-primary)]">
+              <h2 className="mb-4 font-display text-lg font-bold text-[var(--text-primary)] sm:mb-5 sm:text-xl">
                 Featured Channels
               </h2>
-              <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-5 sm:grid-cols-3 md:grid-cols-4">
                 {featured.slice(0, 4).map((ch, i) => (
                   <ChannelCard key={`feat-${i}`} channel={ch} featured />
                 ))}
@@ -257,7 +257,7 @@ export default function HomePage() {
 
           {/* All Channels Grid */}
           <section>
-            <h2 className="mb-5 font-display text-xl font-bold text-[var(--text-primary)]">
+            <h2 className="mb-4 font-display text-lg font-bold text-[var(--text-primary)] sm:mb-5 sm:text-xl">
               {activeGroup === 'All' ? 'All Channels' : activeGroup}
             </h2>
             {filteredChannels.length === 0 ? (
@@ -271,7 +271,7 @@ export default function HomePage() {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-5 sm:grid-cols-3 md:grid-cols-4">
                 {filteredChannels.map((ch, i) => (
                   <ChannelCard key={`ch-${i}`} channel={ch} />
                 ))}

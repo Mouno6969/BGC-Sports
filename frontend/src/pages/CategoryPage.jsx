@@ -88,17 +88,17 @@ export default function CategoryPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 space-y-6">
       {/* Category Header */}
-      <section className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${info.gradient} p-8`}>
+      <section className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${info.gradient} p-5 sm:p-8`}>
         <div className="relative z-10">
           <nav className="mb-3 flex items-center gap-2 text-xs text-[var(--text-muted)]">
             <Link to="/" className="hover:text-accent">Home</Link>
             <span>/</span>
             <span className={info.accent}>{group}</span>
           </nav>
-          <h1 className="font-display text-2xl font-extrabold text-white md:text-3xl">
+          <h1 className="font-display text-xl font-extrabold text-white sm:text-2xl md:text-3xl">
             {info.title}
           </h1>
-          <p className="mt-2 max-w-lg text-sm text-slate-400">{info.description}</p>
+          <p className="mt-2 max-w-lg text-xs text-slate-400 sm:text-sm">{info.description}</p>
           <div className="mt-3 flex items-center gap-2">
             <span className="h-2 w-2 animate-pulseLive rounded-full bg-red-500"></span>
             <span className="text-xs font-bold text-red-400">{channels.length} channels available</span>
@@ -135,7 +135,7 @@ export default function CategoryPage() {
           <p className="text-sm text-[var(--text-muted)]">No channels found</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {filtered.map((ch, i) => (
             <ChannelCard key={i} channel={ch} />
           ))}

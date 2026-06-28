@@ -23,7 +23,7 @@ export default function ChannelCard({ channel, featured }) {
           <img
             src={logoSrc}
             alt={channel.name}
-            className="h-full w-full object-contain p-8 transition-transform duration-300 group-hover:scale-110"
+            className="h-full w-full object-contain p-5 transition-transform duration-300 group-hover:scale-110 sm:p-8"
             loading="lazy"
             onError={(e) => { e.target.style.display = 'none'; }}
           />
@@ -38,7 +38,7 @@ export default function ChannelCard({ channel, featured }) {
 
         {/* Live badge */}
         {isLive && (
-          <span className="absolute top-3 right-3 flex items-center gap-1.5 rounded-md bg-red-500/90 px-2.5 py-1 text-[11px] font-bold text-white uppercase shadow-lg">
+          <span className="absolute top-2 right-2 flex items-center gap-1 rounded-md bg-red-500/90 px-2 py-0.5 text-[9px] font-bold text-white uppercase shadow-lg sm:top-3 sm:right-3 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[11px]">
             <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulseLive" />
             LIVE
           </span>
@@ -55,18 +55,18 @@ export default function ChannelCard({ channel, featured }) {
       </div>
 
       {/* Channel Info */}
-      <div className="p-4">
-        <h3 className="truncate text-sm font-bold text-[var(--text-primary)] leading-tight">
+      <div className="p-3 sm:p-4">
+        <h3 className="truncate text-xs font-bold text-[var(--text-primary)] leading-tight sm:text-sm">
           {channel.name}
         </h3>
-        <div className="mt-2.5 flex items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:mt-2.5 sm:gap-2">
           {channel.group && (
-            <span className="rounded-md bg-[var(--bg-tertiary)] border border-[var(--border-primary)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--text-muted)]">
+            <span className="rounded-md bg-[var(--bg-tertiary)] border border-[var(--border-primary)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)] sm:px-2.5 sm:text-[11px]">
               {channel.group.replace('Z_', '')}
             </span>
           )}
           {featured && (
-            <span className="rounded-md bg-[var(--accent-muted)] border border-[var(--accent)]/20 px-2.5 py-0.5 text-[11px] font-semibold text-[var(--accent)]">
+            <span className="rounded-md bg-[var(--accent-muted)] border border-[var(--accent)]/20 px-2 py-0.5 text-[10px] font-semibold text-[var(--accent)] sm:px-2.5 sm:text-[11px]">
               Featured
             </span>
           )}
