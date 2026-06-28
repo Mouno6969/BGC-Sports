@@ -2,20 +2,27 @@
 // Channel Health-Check Service
 // Periodically tests channel stream URLs and maintains a "dead set" in memory.
 // Dead channels are automatically filtered from all channel API responses.
+//
+// B1/B2 Hardening:
+// - Strike-based dead marking (requires 3 consecutive failures).
+// - Automatic recovery (removes from dead set on a single success).
+// - Report validation (only marks dead if URL exists in the database).
+// - Rate limiting for user reports (prevents spamming).
 // ---------------------------------------------------------------------------
 
-const HEALTH_CHECK_INTERVAL = 5 * 60 * 1000; // Re-check every 5 minutes
+import fetch from 'node-fetch';
+
+const HEALTH_CHECK_INTERVAL = 15 * 60 * 1000; // Re-check every 15 minutes
 const STREAM_TIMEOUT = 8000; // 8 seconds to respond
 
-// In-memory set of dead channel URLs
+// In-memory state
 const deadChannels = new Set();
-
-// Track last check time per URL to avoid hammering
+const strikeCounts = new Map(); // url -> consecutive failure count
 const lastChecked = new Map();
+const lastReportTimes = new Map(); // ip -> last report timestamp
 
 /**
  * Test if a stream URL is alive by attempting a HEAD/GET request.
- * For HLS streams (.m3u8), we check if the manifest is reachable.
  */
 async function testStream(url) {
   if (!url || !url.startsWith('http')) return false;
@@ -28,10 +35,8 @@ async function testStream(url) {
       redirect: 'follow',
     });
     clearTimeout(timeout);
-    // Accept 200-399 as alive (some streams redirect)
     return res.status < 400;
   } catch {
-    // Try GET as fallback (some servers don't support HEAD)
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), STREAM_TIMEOUT);
@@ -51,7 +56,6 @@ async function testStream(url) {
 
 /**
  * Run health checks on a batch of channels.
- * Updates the deadChannels set accordingly.
  */
 async function checkChannels(channels) {
   const now = Date.now();
@@ -65,95 +69,76 @@ async function checkChannels(channels) {
 
   console.log(`[health-check] Testing ${toCheck.length} channels...`);
 
-  // Check in batches of 10 to avoid overwhelming network
   const BATCH_SIZE = 10;
   for (let i = 0; i < toCheck.length; i += BATCH_SIZE) {
     const batch = toCheck.slice(i, i + BATCH_SIZE);
-    const results = await Promise.all(
+    await Promise.all(
       batch.map(async (ch) => {
         const alive = await testStream(ch.url);
         lastChecked.set(ch.url, Date.now());
-        return { url: ch.url, name: ch.name, alive };
+        
+        if (alive) {
+          if (deadChannels.has(ch.url)) {
+            console.log(`[health-check] RECOVERED: ${ch.name}`);
+            deadChannels.delete(ch.url);
+          }
+          strikeCounts.delete(ch.url);
+        } else {
+          const strikes = (strikeCounts.get(ch.url) || 0) + 1;
+          strikeCounts.set(ch.url, strikes);
+          if (strikes >= 3 && !deadChannels.has(ch.url)) {
+            console.log(`[health-check] DEAD (3 strikes): ${ch.name} (${ch.url})`);
+            deadChannels.add(ch.url);
+          }
+        }
       })
     );
-
-    for (const { url, name, alive } of results) {
-      if (!alive) {
-        if (!deadChannels.has(url)) {
-          console.log(`[health-check] DEAD: ${name} (${url.substring(0, 60)}...)`);
-        }
-        deadChannels.add(url);
-      } else {
-        if (deadChannels.has(url)) {
-          console.log(`[health-check] RECOVERED: ${name}`);
-        }
-        deadChannels.delete(url);
-      }
-    }
-
-    // Small delay between batches
     if (i + BATCH_SIZE < toCheck.length) {
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
-
   console.log(`[health-check] Done. Dead channels: ${deadChannels.size}`);
 }
 
 /**
- * Report a channel as dead (called from the player when stream fails in browser).
- * Immediately adds to dead set without waiting for next health check cycle.
+ * Report a channel as dead.
  */
-export function reportDead(url) {
-  if (url && url.startsWith('http')) {
+export function reportDead(url, getChannels, ip = 'unknown') {
+  const now = Date.now();
+  const lastReport = lastReportTimes.get(ip) || 0;
+  if (now - lastReport < 10000) return;
+  lastReportTimes.set(ip, now);
+
+  const channels = getChannels();
+  const exists = channels.some(ch => ch.url === url);
+  if (!exists) return;
+
+  const strikes = (strikeCounts.get(url) || 0) + 2;
+  strikeCounts.set(url, strikes);
+  if (strikes >= 3 && !deadChannels.has(url)) {
+    console.log(`[health-check] DEAD (reported): ${url}`);
     deadChannels.add(url);
-    lastChecked.set(url, Date.now());
-    console.log(`[health-check] Reported dead by user: ${url.substring(0, 60)}...`);
   }
 }
 
-/**
- * Check if a channel URL is in the dead set.
- */
 export function isDead(url) {
   return deadChannels.has(url);
 }
 
-/**
- * Filter an array of channels, removing dead ones.
- */
 export function filterDead(channels) {
   return channels.filter((ch) => !deadChannels.has(ch.url));
 }
 
-/**
- * Get current dead channel count (for admin/debug).
- */
 export function getDeadCount() {
   return deadChannels.size;
 }
 
-/**
- * Get all dead URLs (for admin/debug).
- */
 export function getDeadUrls() {
   return [...deadChannels];
 }
 
-/**
- * Start the periodic health-check loop.
- * Pass a function that returns the current channels array.
- */
 export function startHealthCheckLoop(getChannels) {
-  // Initial check after 30 seconds (let server warm up)
-  setTimeout(() => {
-    checkChannels(getChannels());
-  }, 30 * 1000);
-
-  // Then repeat every HEALTH_CHECK_INTERVAL
-  setInterval(() => {
-    checkChannels(getChannels());
-  }, HEALTH_CHECK_INTERVAL);
-
+  setTimeout(() => checkChannels(getChannels()), 30 * 1000);
+  setInterval(() => checkChannels(getChannels()), HEALTH_CHECK_INTERVAL);
   console.log(`[health-check] Service started. Interval: ${HEALTH_CHECK_INTERVAL / 1000}s`);
 }

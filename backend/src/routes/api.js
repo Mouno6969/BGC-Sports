@@ -52,9 +52,13 @@ router.post('/livekit/token', async (req, res) => {
   }
 
   try {
+    // B3: Sanitize and cap identity/name to prevent oversized tokens or injection
+    const safeIdentity = String(identity).replace(/[<>]/g, '').slice(0, 64);
+    const safeName = (sanitizeUsername(name) || safeIdentity).slice(0, 64);
+
     const at = new AccessToken(config.livekit.apiKey, config.livekit.apiSecret, {
-      identity: String(identity),
-      name: sanitizeUsername(name) || String(identity),
+      identity: safeIdentity,
+      name: safeName,
       ttl: '2h',
     });
     // LiveKit room name = watch-party room code (uppercased).

@@ -12,6 +12,7 @@ import { getStoredUsername } from '../lib/utils.js';
 import ChannelCard from '../components/ChannelCard.jsx';
 import Chat from '../components/Chat.jsx';
 import WatchPartyRoom from '../components/WatchPartyRoom.jsx';
+import { useMediaQuery } from '../hooks/useMediaQuery.js';
 
 export default function WatchPage() {
   const [searchParams] = useSearchParams();
@@ -44,6 +45,7 @@ export default function WatchPage() {
 
   // Chat panel visibility
   const [showChat, setShowChat] = useState(true);
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   const resetHideTimer = useCallback(() => {
     setShowControls(true);
@@ -486,19 +488,21 @@ export default function WatchPage() {
           <WatchPartyRoom />
 
           {/* Chat section (mobile only) */}
-          <div className={`lg:hidden ${showChat ? 'block' : 'hidden'}`}>
-            <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden h-[50vh]">
-              <div className="flex items-center gap-2 border-b border-[var(--border-primary)] px-3 py-2.5 bg-[var(--bg-tertiary)]/50">
-                <svg className="h-4 w-4 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                <span className="text-xs font-bold text-[var(--text-primary)]">Live Chat</span>
-              </div>
-              <div className="h-[calc(100%-40px)]">
-                <Chat />
+          {!isDesktop && showChat && (
+            <div className="lg:hidden">
+              <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden h-[50vh]">
+                <div className="flex items-center gap-2 border-b border-[var(--border-primary)] px-3 py-2.5 bg-[var(--bg-tertiary)]/50">
+                  <svg className="h-4 w-4 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <span className="text-xs font-bold text-[var(--text-primary)]">Live Chat</span>
+                </div>
+                <div className="h-[calc(100%-40px)]">
+                  <Chat />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Related Channels */}
           {relatedChannels.length > 0 && (
@@ -535,21 +539,23 @@ export default function WatchPage() {
         </div>
 
         {/* ── Right Column: Chat Panel (Desktop only) ── */}
-        <aside className="hidden lg:block w-[360px] shrink-0">
-          <div className="sticky top-[100px]">
-            <div className="flex flex-col rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden h-[calc(100vh-120px)]">
-              <div className="flex items-center gap-2 border-b border-[var(--border-primary)] px-3 py-2.5 bg-[var(--bg-tertiary)]/50">
-                <svg className="h-4 w-4 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                <span className="text-xs font-bold text-[var(--text-primary)]">Live Chat</span>
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <Chat />
+        {isDesktop && (
+          <aside className="hidden lg:block w-[360px] shrink-0">
+            <div className="sticky top-[100px]">
+              <div className="flex flex-col rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden h-[calc(100vh-120px)]">
+                <div className="flex items-center gap-2 border-b border-[var(--border-primary)] px-3 py-2.5 bg-[var(--bg-tertiary)]/50">
+                  <svg className="h-4 w-4 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <span className="text-xs font-bold text-[var(--text-primary)]">Live Chat</span>
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <Chat />
+                </div>
               </div>
             </div>
-          </div>
-        </aside>
+          </aside>
+        )}
       </div>
 
       {/* Bottom padding for mobile nav */}

@@ -63,6 +63,15 @@ const io = new SocketIOServer(server, {
 // Expose io to routes (admin uses it to broadcast stream updates).
 app.set('io', io);
 
+// B7: Global JSON error handler
+app.use((err, req, res, next) => {
+  console.error(`[error] ${req.method} ${req.path}:`, err);
+  res.status(err.status || 500).json({
+    ok: false,
+    error: err.message || 'Internal Server Error',
+  });
+});
+
 io.on('connection', (socket) => {
   console.log(`[socket] connected: ${socket.id}`);
   registerChatHandlers(io, socket);

@@ -14,7 +14,7 @@ import { getStream, setStream } from '../utils/streamStore.js';
 const router = Router();
 
 /** Middleware: require a valid admin password header. */
-function requireAdmin(req, res, next) {
+export function requireAdmin(req, res, next) {
   const provided = req.header('x-admin-password') || '';
   if (provided !== config.adminPassword) {
     return res.status(401).json({ error: 'Unauthorized' });

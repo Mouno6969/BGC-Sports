@@ -15,6 +15,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { filterDead, reportDead, getDeadCount, getDeadUrls, startHealthCheckLoop } from '../utils/healthCheck.js';
+import { requireAdmin } from './admin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -107,12 +108,13 @@ router.post('/report-dead', (req, res) => {
   if (!url) {
     return res.status(400).json({ ok: false, error: 'Missing url in request body' });
   }
-  reportDead(url);
+  const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  reportDead(url, () => channels, ip);
   res.json({ ok: true, message: 'Stream reported as dead' });
 });
 
 // GET /api/channels/health-status — admin debug endpoint
-router.get('/health-status', (req, res) => {
+router.get('/health-status', requireAdmin, (req, res) => {
   res.json({
     ok: true,
     deadCount: getDeadCount(),

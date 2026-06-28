@@ -5,9 +5,9 @@
 export const BACKEND_URL =
   import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000';
 
-/** GET helper returning parsed JSON. */
-export async function apiGet(path) {
-  const res = await fetch(`${BACKEND_URL}${path}`);
+/** GET helper returning parsed JSON. `headers` lets callers add auth. */
+export async function apiGet(path, headers = {}) {
+  const res = await fetch(`${BACKEND_URL}${path}`, { headers });
   if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
   return res.json();
 }

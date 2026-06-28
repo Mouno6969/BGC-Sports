@@ -16,13 +16,14 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!authed) return;
-    apiGet('/api/stream')
+    // F3: Hydrate from protected route with password header
+    apiGet('/api/admin/stream', { 'x-admin-password': password })
       .then((d) => {
         setUrl(d.stream.url || '');
         setType(d.stream.type || 'hls');
       })
       .catch(() => {});
-  }, [authed]);
+  }, [authed, password]);
 
   async function handleLogin(e) {
     e.preventDefault();

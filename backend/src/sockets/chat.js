@@ -125,6 +125,16 @@ export function registerChatHandlers(io, socket) {
     });
   });
 
+  socket.on('chat:typing', (payload = {}) => {
+    const { username } = socket.data.chat;
+    if (!username) return;
+    const { isTyping } = payload;
+    socket.broadcast.to(PUBLIC_CHANNEL).emit('chat:typing', {
+      username,
+      isTyping: !!isTyping,
+    });
+  });
+
   socket.on('disconnect', () => {
     if (socket.data.chat?.username) {
       emitCount(io);
