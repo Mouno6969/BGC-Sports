@@ -1,5 +1,6 @@
 // ---------------------------------------------------------------------------
-// ChannelCard — Clean, professional card design. No fake viewer counts.
+// ChannelCard — Large, clean card design matching the ESPN/DAZN mockup.
+// Big logo area, channel name, category tag. No fake viewer counts.
 // ---------------------------------------------------------------------------
 import { Link } from 'react-router-dom';
 import { logoUrl } from '../lib/config.js';
@@ -14,55 +15,58 @@ export default function ChannelCard({ channel, featured }) {
   return (
     <Link
       to={`/watch?url=${encodeURIComponent(channel.url)}&name=${encodeURIComponent(channel.name)}&logo=${encodeURIComponent(channel.logo || '')}`}
-      className="group block rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] overflow-hidden transition-all duration-200 hover:border-[var(--accent)]/30 hover:shadow-card-hover active:scale-[0.98]"
+      className="group block rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] overflow-hidden transition-all duration-200 hover:border-[var(--accent)]/40 hover:shadow-lg hover:shadow-[var(--accent)]/5 active:scale-[0.98]"
     >
-      {/* Thumbnail area */}
-      <div className="relative aspect-video bg-[var(--bg-tertiary)] flex items-center justify-center overflow-hidden">
+      {/* Large Logo/Thumbnail area */}
+      <div className="relative aspect-[4/3] bg-[var(--bg-tertiary)] flex items-center justify-center overflow-hidden">
         {logoSrc ? (
           <img
             src={logoSrc}
             alt={channel.name}
-            className="h-full w-full object-contain p-6 transition-transform duration-300 group-hover:scale-105"
+            className="h-full w-full object-contain p-8 transition-transform duration-300 group-hover:scale-110"
             loading="lazy"
             onError={(e) => { e.target.style.display = 'none'; }}
           />
         ) : (
-          <svg className="h-10 w-10 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
+          <div className="flex flex-col items-center gap-2">
+            <svg className="h-12 w-12 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            <span className="text-xs text-[var(--text-muted)]">{channel.name?.charAt(0) || 'TV'}</span>
+          </div>
         )}
 
         {/* Live badge */}
         {isLive && (
-          <span className="absolute top-2 right-2 flex items-center gap-1 rounded-md bg-red-500/15 border border-red-500/30 px-2 py-0.5 text-[10px] font-bold text-red-400 uppercase">
-            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulseLive" />
-            Live
+          <span className="absolute top-3 right-3 flex items-center gap-1.5 rounded-md bg-red-500/90 px-2.5 py-1 text-[11px] font-bold text-white uppercase shadow-lg">
+            <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulseLive" />
+            LIVE
           </span>
         )}
 
         {/* Play overlay on hover */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/20 transition-all duration-200">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--accent)]/90 text-white shadow-lg">
-            <svg className="h-5 w-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/30 transition-all duration-200">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] text-white shadow-xl shadow-[var(--accent)]/30 transition-transform group-hover:scale-110">
+            <svg className="h-6 w-6 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
               <path d="M8 5v14l11-7z" />
             </svg>
           </div>
         </div>
       </div>
 
-      {/* Info */}
-      <div className="p-3.5">
-        <h3 className="truncate text-sm font-semibold text-[var(--text-primary)] leading-tight">
+      {/* Channel Info */}
+      <div className="p-4">
+        <h3 className="truncate text-sm font-bold text-[var(--text-primary)] leading-tight">
           {channel.name}
         </h3>
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2.5 flex items-center gap-2">
           {channel.group && (
-            <span className="rounded-md bg-[var(--bg-tertiary)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-muted)]">
+            <span className="rounded-md bg-[var(--bg-tertiary)] border border-[var(--border-primary)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--text-muted)]">
               {channel.group.replace('Z_', '')}
             </span>
           )}
           {featured && (
-            <span className="rounded-md bg-[var(--accent-muted)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent)]">
+            <span className="rounded-md bg-[var(--accent-muted)] border border-[var(--accent)]/20 px-2.5 py-0.5 text-[11px] font-semibold text-[var(--accent)]">
               Featured
             </span>
           )}

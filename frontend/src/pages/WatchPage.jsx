@@ -436,44 +436,49 @@ export default function WatchPage() {
             </AnimatePresence>
           </div>
 
-          {/* Channel Info Bar */}
-          <div className="flex items-center justify-between rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-3">
-            <div className="flex items-center gap-2.5">
+          {/* Channel Info Bar — Matching mockup: logo + name + Sports badge + Share */}
+          <div className="flex items-center justify-between rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-3">
+            <div className="flex items-center gap-3">
               {logo && logo.startsWith('http') && (
-                <img src={logo} alt={name} className="h-8 w-8 rounded-lg object-contain bg-[var(--bg-tertiary)] p-0.5" />
+                <img src={logo} alt={name} className="h-10 w-10 rounded-lg object-contain bg-[var(--bg-tertiary)] p-1" />
               )}
               <div>
-                <h1 className="font-display text-sm font-bold text-[var(--text-primary)]">{name}</h1>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="flex items-center gap-1 rounded-full bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 text-[8px] font-bold uppercase text-red-400">
-                    <span className="h-1 w-1 rounded-full bg-red-500 animate-pulseLive" />
+                <h1 className="font-display text-base font-bold text-[var(--text-primary)]">{name}</h1>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="rounded-md bg-[var(--accent)] px-2.5 py-0.5 text-[10px] font-bold text-white">
+                    Sports
+                  </span>
+                  <span className="flex items-center gap-1 text-[10px] font-medium text-red-400">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulseLive" />
                     LIVE
                   </span>
                   {availableLevels.length > 0 && (
-                    <span className="text-[9px] text-[var(--text-muted)]">{currentQualityLabel} quality</span>
+                    <span className="text-[10px] text-[var(--text-muted)]">{currentQualityLabel}</span>
                   )}
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  navigator.clipboard?.writeText(window.location.href);
+                }}
+                className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-primary)] px-3 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors active:scale-95"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+                Share
+              </button>
               <button
                 onClick={() => setShowChat(!showChat)}
-                className="flex h-7 items-center gap-1 rounded-md border border-[var(--border-primary)] px-2 text-[10px] font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors active:scale-95 lg:hidden"
+                className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-primary)] px-3 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors active:scale-95 lg:hidden"
               >
-                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
-                {showChat ? 'Hide Chat' : 'Chat'}
+                {showChat ? 'Hide' : 'Chat'}
               </button>
-              <Link
-                to="/"
-                className="flex h-7 items-center gap-1 rounded-md border border-[var(--border-primary)] px-2 text-[10px] font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors active:scale-95"
-              >
-                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-                Channels
-              </Link>
             </div>
           </div>
 

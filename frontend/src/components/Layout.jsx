@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
-// Layout — Premium, clean app shell with professional navigation
+// Layout — Premium app shell matching the ESPN/DAZN-style mockup
 // ---------------------------------------------------------------------------
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext.jsx';
 import LiveScoreTicker from './LiveScoreTicker.jsx';
 
@@ -86,21 +86,15 @@ export default function Layout() {
             : 'border-[var(--border-primary)] bg-[var(--bg-secondary)]'
         }`}
       >
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 lg:px-6">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5">
-            <img
-              src="/logo.png"
-              alt="BGC Sports"
-              className="h-8 w-auto object-contain"
-              onError={(e) => { e.target.style.display = 'none'; }}
-            />
-            <span className="font-display text-lg font-extrabold tracking-tight text-[var(--text-primary)]">
-              BGC<span className="text-[var(--accent)]"> SPORTS</span>
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 lg:px-6">
+          {/* Logo — Bold italic green like mockup */}
+          <Link to="/" className="flex items-center gap-2">
+            <span className="font-display text-xl font-extrabold italic tracking-tight text-[var(--accent)]">
+              BGC<span className="text-[var(--text-primary)]"> </span>SPORTS
             </span>
           </Link>
 
-          {/* Desktop Nav */}
+          {/* Desktop Nav — Centered */}
           <nav className="hidden items-center gap-1 md:flex">
             {NAV_LINKS.map((link) => {
               const isActive = location.pathname === link.path ||
@@ -109,10 +103,10 @@ export default function Layout() {
                 <Link
                   key={link.label}
                   to={link.path}
-                  className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-150 ${
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-150 ${
                     isActive
-                      ? 'text-[var(--accent)] bg-[var(--accent-muted)]'
-                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+                      ? 'text-[var(--text-primary)] font-semibold'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   {link.label}
@@ -122,10 +116,10 @@ export default function Layout() {
           </nav>
 
           {/* Right side */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {/* Search */}
             <button className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]">
-              <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </button>
@@ -137,20 +131,20 @@ export default function Layout() {
               title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
             >
               {theme === 'dark' ? (
-                <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               ) : (
-                <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                 </svg>
               )}
             </button>
 
             {/* Live indicator */}
-            <div className="hidden items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1.5 sm:flex">
+            <div className="hidden items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-3.5 py-1.5 sm:flex">
               <span className="h-2 w-2 animate-pulseLive rounded-full bg-red-500" />
-              <span className="text-xs font-bold uppercase tracking-wide text-red-400">Live</span>
+              <span className="text-xs font-bold uppercase tracking-wide text-red-400">LIVE</span>
             </div>
 
             {/* Mobile hamburger */}
@@ -204,7 +198,7 @@ export default function Layout() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-[var(--border-primary)] bg-[var(--bg-secondary)] py-6 mb-16 md:mb-0">
+      <footer className="border-t border-[var(--border-primary)] bg-[var(--bg-secondary)] py-8 mb-16 md:mb-0">
         <div className="mx-auto max-w-7xl px-4 text-center">
           <p className="text-sm text-[var(--text-muted)]">
             BGC Sports &copy; {new Date().getFullYear()} — Live Sports Streaming Platform
