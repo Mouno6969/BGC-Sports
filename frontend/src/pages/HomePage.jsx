@@ -7,9 +7,11 @@ import { apiGet } from '../lib/config.js';
 import ChannelCard from '../components/ChannelCard.jsx';
 import LiveScoresSection from '../components/LiveScoresSection.jsx';
 import WorldCupSection from '../components/WorldCupSection.jsx';
+import ToffeeSection from '../components/ToffeeSection.jsx';
 
 const MAIN_TABS = [
   { id: 'channels', label: 'Channels' },
+  { id: 'toffee', label: 'Toffee Live' },
   { id: 'worldcup', label: 'World Cup' },
   { id: 'scores', label: 'Live Scores' },
 ];
@@ -198,7 +200,6 @@ export default function HomePage() {
             {activeTab === tab.id && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent)] rounded-full" />
             )}
-          </button>
         ))}
       </div>
 
@@ -293,6 +294,12 @@ export default function HomePage() {
               </Link>
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'toffee' && (
+        <div className="animate-fadeIn">
+          <ToffeeSection />
         </div>
       )}
 
