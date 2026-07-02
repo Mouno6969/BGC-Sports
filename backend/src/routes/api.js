@@ -2,6 +2,7 @@
 // Public API routes:
 //   GET  /api/health        -> service health + feature flags
 //   GET  /api/stream        -> current global stream config (public)
+//   GET  /api/toffee/channels -> Toffee live channels with required headers
 //   POST /api/livekit/token -> mint a LiveKit access token for a room
 // ---------------------------------------------------------------------------
 
@@ -11,6 +12,7 @@ import { config, isLiveKitConfigured } from '../config/index.js';
 import { getStream } from '../utils/streamStore.js';
 import { roomStore } from '../utils/roomStore.js';
 import { sanitizeUsername } from '../utils/identity.js';
+import { fetchToffeeChannels, getToffeeChannels } from '../utils/toffeeService.js';
 
 const router = Router();
 
@@ -21,12 +23,29 @@ router.get('/health', (req, res) => {
     livekitEnabled: isLiveKitConfigured(),
     livekitUrl: isLiveKitConfigured() ? config.livekit.url : null,
     maxParticipants: config.maxParticipantsPerRoom,
+    toffeeEnabled: true,
   });
 });
 
 // Public read of the current stream config.
 router.get('/stream', (req, res) => {
   res.json({ ok: true, stream: getStream() });
+});
+
+// Toffee channels - returns channels + the exact headers needed for playback
+router.get('/toffee/channels', async (req, res) => {
+  try {
+    const channels = await fetchToffeeChannels();
+    res.json({ 
+      ok: true, 
+      count: channels.length,
+      channels,
+      note: 'Pass the "headers" object to Hls.js via config.xhrSetup when playing these streams'
+    });
+  } catch (error) {
+    console.error('[toffee] API error:', error);
+    res.status(500).json({ ok: false, error: 'Failed to load Toffee channels' });
+  }
 });
 
 // Mint a LiveKit token for a participant joining a room's video call.
