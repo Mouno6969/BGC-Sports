@@ -15,17 +15,18 @@ all in a minimal, dark, sports-style UI.
 ## Table of Contents
 
 1. [Features](#features)
-2. [Architecture](#architecture)
-3. [Tech Stack](#tech-stack)
-4. [Repository Layout](#repository-layout)
-5. [Quick Start (Local Dev)](#quick-start-local-dev)
-6. [Environment Variables](#environment-variables)
-7. [LiveKit Setup (Group Calls)](#livekit-setup-group-calls)
-8. [Admin Panel](#admin-panel)
-9. [How Sync Works](#how-sync-works)
-10. [Deployment](#deployment)
-11. [API & Socket Reference](#api--socket-reference)
-12. [Troubleshooting](#troubleshooting)
+2. [Toffee Live Integration](#toffee-live-integration) ← **New**
+3. [Architecture](#architecture)
+4. [Tech Stack](#tech-stack)
+5. [Repository Layout](#repository-layout)
+6. [Quick Start (Local Dev)](#quick-start-local-dev)
+7. [Environment Variables](#environment-variables)
+8. [LiveKit Setup (Group Calls)](#livekit-setup-group-calls)
+9. [Admin Panel](#admin-panel)
+10. [How Sync Works](#how-sync-works)
+11. [Deployment](#deployment)
+12. [API & Socket Reference](#api--socket-reference)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -55,6 +56,36 @@ all in a minimal, dark, sports-style UI.
 - All participants share the **same stream timestamp**; the host controls playback.
 - **"Sync to host"** button re-aligns any participant who drifts.
 
+### 5. Toffee Live (New)
+- Access popular Bangladeshi live channels from Toffee directly inside BGC-Sports.
+- Streams are automatically fetched with the correct headers for reliable playback.
+- Dedicated **"Toffee Live"** tab on the homepage with beautiful channel grid.
+
+---
+
+## Toffee Live Integration
+
+BGC-Sports now includes native support for **Toffee** (toffeelive.com) streams.
+
+### How it works
+- Backend periodically fetches fresh channel data + required headers from the public bypass repository.
+- Frontend Player automatically injects the necessary headers using `Hls.js` `xhrSetup`.
+- No extra configuration needed.
+
+### API
+```http
+GET /api/toffee/channels
+```
+Returns a list of channels with `url` and `headers` object.
+
+### Usage in Frontend
+```jsx
+// The Player component already supports custom headers
+<Player stream={{ url, type: 'hls', headers: channel.headers }} />
+```
+
+The homepage now has a dedicated **Toffee Live** tab with a beautiful grid of live channels.
+
 ---
 
 ## Architecture
@@ -66,18 +97,13 @@ all in a minimal, dark, sports-style UI.
                  └───────┬──────────────────┬──────────────────┘
                          │ Socket.IO        │ HTTPS (REST)        │ WebRTC media
                          │ (chat/signaling) │ (token, stream,     │ (audio/video)
-                         ▼                  │  admin)             ▼
+                         ▼                  │  admin, toffee)     ▼
                  ┌───────────────────────────────────┐   ┌──────────────────┐
                  │  Node + Express + Socket.IO       │   │   LiveKit (SFU)  │
                  │  rooms · chat · host-sync · admin │──▶│  token-authed    │
-                 │  in-memory store · LiveKit tokens │   │  rooms (≤8)      │
+                 │  toffee fetcher · in-memory store │   │  rooms (≤8)      │
                  └───────────────────────────────────┘   └──────────────────┘
 ```
-
-- The **backend** issues short-lived LiveKit access tokens; **media never flows
-  through the Express server** — it goes peer→SFU→peers via LiveKit.
-- Room and chat state are kept in an **in-memory store** (no database needed for MVP).
-  Swap in Redis for multi-instance scaling.
 
 ---
 
@@ -99,33 +125,24 @@ all in a minimal, dark, sports-style UI.
 BGC-Sports/
 ├── backend/
 │   ├── src/
-│   │   ├── server.js              # Express + Socket.IO entrypoint
-│   │   ├── config/index.js        # env loader
+│   │   ├── server.js
+│   │   ├── config/index.js
 │   │   ├── routes/
-│   │   │   ├── api.js             # /api/health, /api/stream, /api/livekit/token
-│   │   │   └── admin.js           # /api/admin/login, /api/admin/stream
+│   │   │   ├── api.js             # includes /api/toffee/channels
+│   │   │   └── admin.js
 │   │   ├── sockets/
-│   │   │   ├── chat.js            # public chat handlers
-│   │   │   └── room.js            # watch-party rooms + host sync
-│   │   └── utils/
-│   │       ├── roomStore.js       # in-memory rooms/participants
-│   │       ├── streamStore.js     # current stream state
-│   │       └── identity.js        # guest names + colors
-│   ├── deploy/
-│   │   ├── bgc-sports.service     # systemd unit
-│   │   ├── nginx.conf.example     # reverse proxy (WS-aware)
-│   │   ├── livekit-docker-compose.yml
-│   │   └── livekit.yaml
-│   └── .env.example
+│   │   ├── utils/
+│   │   │   └── toffeeService.js   # NEW - Toffee integration
+│   │   └── data/
+│   └── deploy/
 └── frontend/
     ├── src/
-    │   ├── App.jsx                # layout + wiring
-    │   ├── components/            # Player, Chat, Room, VideoCall, Header
-    │   ├── pages/AdminPage.jsx    # password-protected dashboard
-    │   ├── hooks/                 # useSocket, useRoom
-    │   └── lib/                   # config, socket, utils
-    ├── vercel.json                # SPA rewrites
-    └── .env.example
+    │   ├── components/
+    │   │   └── ToffeeSection.jsx  # NEW
+    │   ├── pages/
+    │   │   └── HomePage.jsx       # Toffee tab added
+    │   └── lib/
+    └── vercel.json
 ```
 
 ---
@@ -152,9 +169,7 @@ pnpm install
 pnpm dev                      # starts on http://localhost:5173
 ```
 
-Open `http://localhost:5173`. The default stream is the public **Big Buck Bunny**
-HLS test stream so you can verify playback immediately. Group calls stay disabled
-(with a friendly notice) until you add LiveKit credentials.
+Open `http://localhost:5173`. Go to the **Toffee Live** tab to see live channels.
 
 ---
 
@@ -172,7 +187,6 @@ HLS test stream so you can verify playback immediately. Group calls stay disable
 | `LIVEKIT_URL`        | no\*     | —                        | LiveKit server URL (`wss://…`)                         |
 | `LIVEKIT_API_KEY`    | no\*     | —                        | LiveKit API key                                        |
 | `LIVEKIT_API_SECRET` | no\*     | —                        | LiveKit API secret                                     |
-| `MAX_ROOM_SIZE`      | no       | `8`                      | Max participants per call                              |
 
 \* Required only to enable group video/audio calls.
 
@@ -248,28 +262,24 @@ sudo systemctl daemon-reload && sudo systemctl enable --now bgc-sports
 
 # nginx (WebSocket-aware reverse proxy)
 sudo cp deploy/nginx.conf.example /etc/nginx/sites-available/bgc-sports
-sudo ln -s /etc/nginx/sites-available/bgc-sports /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/bgc-sports /etc/nginx-sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 # then add HTTPS, e.g.:  sudo certbot --nginx -d api.yourdomain.com
 ```
-> Edit the paths/user/domain inside `deploy/bgc-sports.service` and
-> `deploy/nginx.conf.example` to match your server.
-
-### LiveKit → Cloud or Docker
-See [LiveKit Setup](#livekit-setup-group-calls).
 
 ---
 
 ## API & Socket Reference
 
 ### REST
-| Method | Path                  | Auth                | Description                          |
-|--------|-----------------------|---------------------|--------------------------------------|
-| GET    | `/api/health`         | —                   | Status + whether LiveKit is enabled  |
-| GET    | `/api/stream`         | —                   | Current stream `{ url, type }`       |
-| POST   | `/api/admin/login`    | body `{password}`   | Verify admin password                |
-| POST   | `/api/admin/stream`   | header `x-admin-password` | Update + broadcast stream      |
-| POST   | `/api/livekit/token`  | body `{roomCode, identity}` | Mint a LiveKit access token  |
+| Method | Path                        | Auth                | Description                                      |
+|--------|-----------------------------|---------------------|--------------------------------------------------|
+| GET    | `/api/health`               | —                   | Status + LiveKit + Toffee flags                  |
+| GET    | `/api/stream`               | —                   | Current stream `{ url, type }`                   |
+| GET    | `/api/toffee/channels`      | —                   | Toffee channels + required headers (NEW)         |
+| POST   | `/api/admin/login`          | body `{password}`   | Verify admin password                            |
+| POST   | `/api/admin/stream`         | header `x-admin-password` | Update + broadcast stream               |
+| POST   | `/api/livekit/token`        | body `{roomCode, identity}` | Mint a LiveKit access token             |
 
 ### Socket.IO events
 | Event                | Direction | Payload                                  |
@@ -297,6 +307,7 @@ See [LiveKit Setup](#livekit-setup-group-calls).
 - **CORS errors:** set `CORS_ORIGIN` to your exact frontend origin in production.
 - **YouTube/Twitch won't embed:** some streams block embedding; use an HLS URL or
   an embeddable source.
+- **Toffee streams not playing:** Make sure you're using the `/api/toffee/channels` endpoint and passing the `headers` object to the player.
 
 ---
 
