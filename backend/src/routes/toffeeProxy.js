@@ -73,6 +73,7 @@ router.get('/manifest', async (req, res) => {
       const proxyPath = isManifest ? 'manifest' : 'segment';
 
       // Construct the proxy URL
+      // We use relative paths for the proxy itself so it works across different hostnames
       const proxyUrl = `/api/toffee-proxy/${proxyPath}?url=${encodeURIComponent(absoluteUrl)}&headers=${encodedHeaders}`;
       return proxyUrl;
     });

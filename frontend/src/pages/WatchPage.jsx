@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Hls from 'hls.js';
-import { apiGet, apiPost } from '../lib/config.js';
+import { apiGet, apiPost, BACKEND_URL } from '../lib/config.js';
 import { getStoredUsername } from '../lib/utils.js';
 import ChannelCard from '../components/ChannelCard.jsx';
 import Chat from '../components/Chat.jsx';
@@ -97,7 +97,7 @@ export default function WatchPage() {
       if (streamHeaders) {
         // Use the backend proxy for Toffee streams
         const encodedHeaders = btoa(JSON.stringify(streamHeaders));
-        sourceUrl = `/api/toffee-proxy/manifest?url=${encodeURIComponent(url)}&headers=${encodedHeaders}`;
+        sourceUrl = `${BACKEND_URL}/api/toffee-proxy/manifest?url=${encodeURIComponent(url)}&headers=${encodedHeaders}`;
       }
 
       const hls = new Hls(hlsConfig);

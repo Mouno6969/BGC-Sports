@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
+import { BACKEND_URL } from '../lib/config.js';
 
 const DRIFT_THRESHOLD = 2; // seconds
 
@@ -65,7 +66,7 @@ export default function Player({
       if (stream.headers) {
         // Use the backend proxy for Toffee streams
         const encodedHeaders = btoa(JSON.stringify(stream.headers));
-        sourceUrl = `/api/toffee-proxy/manifest?url=${encodeURIComponent(url)}&headers=${encodedHeaders}`;
+        sourceUrl = `${BACKEND_URL}/api/toffee-proxy/manifest?url=${encodeURIComponent(url)}&headers=${encodedHeaders}`;
       }
 
       const hls = new Hls(hlsConfig);
