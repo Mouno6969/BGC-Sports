@@ -2,8 +2,32 @@
 // Frontend runtime config + small fetch helpers for the backend REST API.
 // ---------------------------------------------------------------------------
 
-export const BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL || (window.location.origin.includes('5174') ? window.location.origin.replace('5174', '4000') : 'http://localhost:4000');
+// Determine backend URL based on environment
+// Priority: 1. VITE_BACKEND_URL env var (production), 2. Port rewrite for dev, 3. Same origin
+export const BACKEND_URL = (() => {
+  // If explicitly set via environment variable, use it
+  if (import.meta.env.VITE_BACKEND_URL) {
+    return import.meta.env.VITE_BACKEND_URL;
+  }
+
+  const origin = window.location.origin;
+  
+  // For Vite dev server (port 5173/5174), rewrite to backend port 4000
+  if (origin.includes('5173') || origin.includes('5174')) {
+    return origin.replace(/(5173|5174)/, '4000');
+  }
+  
+  // For localhost, assume backend is on port 4000
+  if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+    const url = new URL(origin);
+    url.port = '4000';
+    return url.origin;
+  }
+  
+  // For production/remote, assume backend is on same origin
+  // (typically behind a reverse proxy on the same domain)
+  return origin;
+})();
 
 /** GET helper returning parsed JSON. `headers` lets callers add auth. */
 export async function apiGet(path, headers = {}) {

@@ -21,11 +21,18 @@ let cache = {
 async function fetchFromSource(url) {
   try {
     const res = await fetch(url, { timeout: 5000 });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[toffee] Source ${url} returned ${res.status}`);
+      return null;
+    }
     const data = await res.json();
-    if (!data.channels || !Array.isArray(data.channels)) return null;
+    if (!data.channels || !Array.isArray(data.channels)) {
+      console.warn(`[toffee] Source ${url} has invalid format`);
+      return null;
+    }
     return data.channels;
   } catch (e) {
+    console.warn(`[toffee] Failed to fetch from ${url}: ${e.message}`);
     return null;
   }
 }

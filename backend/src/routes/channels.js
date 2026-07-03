@@ -16,7 +16,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { filterDead, reportDead, getDeadCount, getDeadUrls, startHealthCheckLoop } from '../utils/healthCheck.js';
 import { requireAdmin } from './admin.js';
-import { fetchToffeeChannels } from '../utils/toffee.js';
+import { fetchToffeeChannels } from '../utils/toffeeService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
