@@ -65,8 +65,7 @@ export default function Player({
       let sourceUrl = url;
       if (stream.headers) {
         // Use the backend proxy for Toffee streams
-        const encodedHeaders = btoa(JSON.stringify(stream.headers));
-        sourceUrl = `${BACKEND_URL}/api/toffee-proxy/manifest?url=${encodeURIComponent(url)}&headers=${encodedHeaders}`;
+        sourceUrl = `${BACKEND_URL}/api/toffee-proxy/manifest?url=${encodeURIComponent(url)}`;
       }
 
       const hls = new Hls(hlsConfig);

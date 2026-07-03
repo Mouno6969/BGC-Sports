@@ -96,8 +96,7 @@ export default function WatchPage() {
       let sourceUrl = url;
       if (streamHeaders) {
         // Use the backend proxy for Toffee streams
-        const encodedHeaders = btoa(JSON.stringify(streamHeaders));
-        sourceUrl = `${BACKEND_URL}/api/toffee-proxy/manifest?url=${encodeURIComponent(url)}&headers=${encodedHeaders}`;
+        sourceUrl = `${BACKEND_URL}/api/toffee-proxy/manifest?url=${encodeURIComponent(url)}`;
       }
 
       const hls = new Hls(hlsConfig);

@@ -79,6 +79,16 @@ export function getToffeeChannels() {
 }
 
 /**
+ * Find a channel by its URL to retrieve its headers
+ */
+export async function getToffeeChannelByUrl(url) {
+  const channels = await fetchToffeeChannels();
+  // Toffee URLs often have dynamic query params, so we check if the base URL matches
+  const targetBase = url.split('?')[0];
+  return channels.find(ch => ch.url.split('?')[0] === targetBase);
+}
+
+/**
  * Force refresh (useful for admin or testing)
  */
 export async function refreshToffeeChannels() {
