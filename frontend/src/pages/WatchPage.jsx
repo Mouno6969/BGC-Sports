@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Hls from 'hls.js';
-import { apiGet, apiPost } from '../lib/config.js';
+import { apiGet, apiPost, streamUrl } from '../lib/config.js';
 import { getStoredUsername } from '../lib/utils.js';
 import ChannelCard from '../components/ChannelCard.jsx';
 import Chat from '../components/Chat.jsx';
@@ -25,7 +25,6 @@ export default function WatchPage() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [streamHeaders, setStreamHeaders] = useState(null);
   const [relatedChannels, setRelatedChannels] = useState([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fitToScreen, setFitToScreen] = useState(false);
@@ -59,25 +58,14 @@ export default function WatchPage() {
     return () => clearTimeout(hideTimer.current);
   }, [resetHideTimer]);
 
-    // Fetch stream headers if it's a Toffee stream
-  useEffect(() => {
-    if (!url) return;
-    setStreamHeaders(null);
-    apiGet('/api/channels')
-      .then((res) => {
-        const channel = res.channels?.find((ch) => ch.url === url);
-        if (channel?.headers) {
-          setStreamHeaders(channel.headers);
-        }
-      })
-      .catch(() => {});
-  }, [url]);
-
-  // Load HLS stream
+  // Load HLS stream. Toffee streams come through the backend proxy (which
+  // injects the required signed headers), so the browser never needs to set
+  // forbidden headers itself — it just loads the resolved proxy URL.
   useEffect(() => {
     if (!url) return;
     const video = videoRef.current;
     if (!video) return;
+    const playbackUrl = streamUrl(url);
     setError(null);
     setLoading(true);
     setAvailableLevels([]);
@@ -93,19 +81,9 @@ export default function WatchPage() {
         maxBufferLength: 30,
       };
 
-      if (streamHeaders) {
-        hlsConfig.xhrSetup = (xhr) => {
-          Object.entries(streamHeaders).forEach(([key, value]) => {
-            if (key.toLowerCase() !== 'host') {
-              xhr.setRequestHeader(key, value);
-            }
-          });
-        };
-      }
-
       const hls = new Hls(hlsConfig);
       hlsRef.current = hls;
-      hls.loadSource(url);
+      hls.loadSource(playbackUrl);
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -131,7 +109,7 @@ export default function WatchPage() {
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = url;
+      video.src = playbackUrl;
       video.addEventListener('loadeddata', () => { setLoading(false); video.play().catch(() => {}); }, { once: true });
     } else {
       setError('HLS playback is not supported in this browser.');
@@ -144,7 +122,7 @@ export default function WatchPage() {
         hlsRef.current = null;
       }
     };
-  }, [url, streamHeaders]);
+  }, [url]);
 
   // Load related channels
   useEffect(() => {

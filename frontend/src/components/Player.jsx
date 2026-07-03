@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
+import { streamUrl } from '../lib/config.js';
 
 const DRIFT_THRESHOLD = 2; // seconds
 
@@ -54,27 +55,20 @@ export default function Player({
       hlsRef.current = null;
     }
 
+    // Toffee streams are served via the backend proxy (which injects the
+    // required signed headers server-side), so we just resolve to the proxy URL.
+    // Browsers can't set the forbidden headers (cookie/user-agent/host) anyway.
+    const playbackUrl = streamUrl(url);
+
     if (Hls.isSupported()) {
-      // Pass custom headers if provided (needed for Toffee streams)
-      const hlsConfig = { 
-        lowLatencyMode: true, 
+      const hlsConfig = {
+        lowLatencyMode: true,
         enableWorker: true,
       };
-      
-      if (stream.headers) {
-        hlsConfig.xhrSetup = (xhr, url) => {
-          Object.entries(stream.headers).forEach(([key, value]) => {
-            // Skip Host header as it's usually forbidden to set manually in browsers
-            if (key.toLowerCase() !== 'host') {
-              xhr.setRequestHeader(key, value);
-            }
-          });
-        };
-      }
 
       const hls = new Hls(hlsConfig);
       hlsRef.current = hls;
-      hls.loadSource(url);
+      hls.loadSource(playbackUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => setLoading(false));
       hls.on(Hls.Events.ERROR, (_e, data) => {
@@ -84,7 +78,7 @@ export default function Player({
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = url;
+      video.src = playbackUrl;
       video.addEventListener('loadeddata', () => setLoading(false), { once: true });
     } else {
       setError('HLS is not supported in this browser.');

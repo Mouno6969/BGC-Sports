@@ -22,6 +22,20 @@ export function logoUrl(url) {
   return `${BACKEND_URL}/api/logo-proxy?url=${encodeURIComponent(url)}`;
 }
 
+/**
+ * Resolves a stream/playback URL to an absolute one the player can load.
+ * Toffee channels are served as a relative backend proxy path
+ * (e.g. "/api/toffee-proxy?url=..."); those must be prefixed with BACKEND_URL
+ * so hls.js hits the backend (which injects the required headers) instead of
+ * the frontend origin. Absolute http(s) URLs are returned unchanged.
+ */
+export function streamUrl(url) {
+  if (!url) return url;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/')) return `${BACKEND_URL}${url}`;
+  return url;
+}
+
 /** POST helper returning parsed JSON. `headers` lets callers add auth. */
 export async function apiPost(path, body, headers = {}) {
   const res = await fetch(`${BACKEND_URL}${path}`, {

@@ -16,6 +16,7 @@ import apiRoutes from './routes/api.js';
 import adminRoutes from './routes/admin.js';
 import channelsRoutes from './routes/channels.js';
 import logoProxyRoute from './routes/logoProxy.js';
+import toffeeProxyRoute from './routes/toffeeProxy.js';
 import scoresRoute from './routes/scores.js';
 import { registerChatHandlers } from './sockets/chat.js';
 import { registerRoomHandlers } from './sockets/room.js';
@@ -50,6 +51,7 @@ app.use('/api', apiRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/channels', channelsRoutes);
 app.use('/api/logo-proxy', logoProxyRoute);
+app.use('/api/toffee-proxy', toffeeProxyRoute);
 app.use('/api/scores', scoresRoute);
 
 // ------------------------------ Socket.IO ----------------------------------

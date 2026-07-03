@@ -12,7 +12,7 @@ import { config, isLiveKitConfigured } from '../config/index.js';
 import { getStream } from '../utils/streamStore.js';
 import { roomStore } from '../utils/roomStore.js';
 import { sanitizeUsername } from '../utils/identity.js';
-import { fetchToffeeChannels, getToffeeChannels } from '../utils/toffeeService.js';
+import { fetchToffeeChannels } from '../utils/toffee.js';
 
 const router = Router();
 
@@ -36,11 +36,11 @@ router.get('/stream', (req, res) => {
 router.get('/toffee/channels', async (req, res) => {
   try {
     const channels = await fetchToffeeChannels();
-    res.json({ 
-      ok: true, 
+    res.json({
+      ok: true,
       count: channels.length,
       channels,
-      note: 'Pass the "headers" object to Hls.js via config.xhrSetup when playing these streams'
+      note: 'Play channel.url directly — it points at /api/toffee-proxy, which injects the required Toffee headers server-side.',
     });
   } catch (error) {
     console.error('[toffee] API error:', error);
