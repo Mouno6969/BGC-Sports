@@ -24,7 +24,7 @@ const lastReportTimes = new Map(); // ip -> last report timestamp
 /**
  * Test if a stream URL is alive by attempting a HEAD/GET request.
  */
-async function testStream(url) {
+async function testStream(url, headers = {}) {
   if (!url || !url.startsWith('http')) return false;
   try {
     const controller = new AbortController();
@@ -33,6 +33,7 @@ async function testStream(url) {
       method: 'HEAD',
       signal: controller.signal,
       redirect: 'follow',
+      headers: headers
     });
     clearTimeout(timeout);
     return res.status < 400;
@@ -44,7 +45,7 @@ async function testStream(url) {
         method: 'GET',
         signal: controller.signal,
         redirect: 'follow',
-        headers: { Range: 'bytes=0-1024' },
+        headers: { Range: 'bytes=0-1024', ...headers },
       });
       clearTimeout(timeout);
       return res.status < 400;
@@ -74,7 +75,7 @@ async function checkChannels(channels) {
     const batch = toCheck.slice(i, i + BATCH_SIZE);
     await Promise.all(
       batch.map(async (ch) => {
-        const alive = await testStream(ch.url);
+        const alive = await testStream(ch.url, ch.headers || {});
         lastChecked.set(ch.url, Date.now());
         
         if (alive) {
@@ -138,7 +139,7 @@ export function getDeadUrls() {
 }
 
 export function startHealthCheckLoop(getChannels) {
-  setTimeout(() => checkChannels(getChannels()), 30 * 1000);
+  setTimeout(() => checkChannels(getChannels()), 5 * 1000);
   setInterval(() => checkChannels(getChannels()), HEALTH_CHECK_INTERVAL);
   console.log(`[health-check] Service started. Interval: ${HEALTH_CHECK_INTERVAL / 1000}s`);
 }

@@ -10,10 +10,12 @@ export default function ToffeeSection() {
   useEffect(() => {
     let mounted = true;
 
-    apiGet('/api/toffee/channels')
-      .then((res) => {
-        if (mounted && res.ok) {
-          setChannels(res.channels || []);
+    apiGet('/api/channels?group=Toffee')
+      .then((data) => {
+        console.log('Toffee API response:', data);
+        if (mounted && data.channels) {
+          console.log('Setting Toffee channels:', data.channels.length);
+          setChannels(data.channels);
         }
       })
       .catch((err) => {

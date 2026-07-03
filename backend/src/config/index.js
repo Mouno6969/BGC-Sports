@@ -20,7 +20,7 @@ export const config = {
   port: parseInt(process.env.PORT || '4000', 10),
 
   // CORS origins for both Express and Socket.IO
-  clientOrigin: parseOrigins(process.env.CLIENT_ORIGIN || 'http://localhost:5173'),
+  clientOrigin: '*',
 
   // Admin panel password
   adminPassword: process.env.ADMIN_PASSWORD || 'changeme-admin-password',

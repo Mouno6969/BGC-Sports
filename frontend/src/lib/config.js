@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 export const BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000';
+  import.meta.env.VITE_BACKEND_URL || (window.location.origin.includes('5174') ? window.location.origin.replace('5174', '4000') : 'http://localhost:4000');
 
 /** GET helper returning parsed JSON. `headers` lets callers add auth. */
 export async function apiGet(path, headers = {}) {

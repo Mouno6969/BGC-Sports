@@ -1,7 +1,7 @@
 import https from 'https';
 
 // Toffee channel bypass data source (public, regularly updated)
-const TOFFEE_DATA_URL = 'https://raw.githubusercontent.com/Gtajisan/Toffee-channel-bypass/main/toffee_channel_data.json';
+const TOFFEE_DATA_URL = 'https://raw.githubusercontent.com/Gtajisan/Toffee-Auto-Update-Playlist/main/toffee_channel_data.json';
 
 // In-memory cache
 let cache = {
@@ -37,7 +37,8 @@ export async function fetchToffeeChannels() {
       }).on('error', reject);
     });
 
-    const rawChannels = JSON.parse(response);
+    const jsonData = JSON.parse(response);
+    const rawChannels = jsonData.channels || [];
 
     // Normalize + add metadata
     const channels = rawChannels.map((ch, index) => ({
