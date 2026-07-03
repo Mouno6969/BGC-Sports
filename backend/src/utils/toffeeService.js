@@ -59,6 +59,7 @@ export async function fetchToffeeChannels() {
         type: 'hls',
         logo: ch.logo || null,
         headers: ch.headers || {},
+        group: 'Toffee',
         source: 'toffee',
         updatedAt: now,
       }));
