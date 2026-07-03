@@ -61,20 +61,16 @@ export default function Player({
         enableWorker: true,
       };
       
+      let sourceUrl = url;
       if (stream.headers) {
-        hlsConfig.xhrSetup = (xhr, url) => {
-          Object.entries(stream.headers).forEach(([key, value]) => {
-            // Skip Host header as it's usually forbidden to set manually in browsers
-            if (key.toLowerCase() !== 'host') {
-              xhr.setRequestHeader(key, value);
-            }
-          });
-        };
+        // Use the backend proxy for Toffee streams
+        const encodedHeaders = btoa(JSON.stringify(stream.headers));
+        sourceUrl = `/api/toffee-proxy/manifest?url=${encodeURIComponent(url)}&headers=${encodedHeaders}`;
       }
 
       const hls = new Hls(hlsConfig);
       hlsRef.current = hls;
-      hls.loadSource(url);
+      hls.loadSource(sourceUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => setLoading(false));
       hls.on(Hls.Events.ERROR, (_e, data) => {

@@ -93,19 +93,16 @@ export default function WatchPage() {
         maxBufferLength: 30,
       };
 
+      let sourceUrl = url;
       if (streamHeaders) {
-        hlsConfig.xhrSetup = (xhr) => {
-          Object.entries(streamHeaders).forEach(([key, value]) => {
-            if (key.toLowerCase() !== 'host') {
-              xhr.setRequestHeader(key, value);
-            }
-          });
-        };
+        // Use the backend proxy for Toffee streams
+        const encodedHeaders = btoa(JSON.stringify(streamHeaders));
+        sourceUrl = `/api/toffee-proxy/manifest?url=${encodeURIComponent(url)}&headers=${encodedHeaders}`;
       }
 
       const hls = new Hls(hlsConfig);
       hlsRef.current = hls;
-      hls.loadSource(url);
+      hls.loadSource(sourceUrl);
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
