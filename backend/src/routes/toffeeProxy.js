@@ -4,6 +4,15 @@ import { getToffeeChannelByUrl } from '../utils/toffeeService.js';
 
 const router = Router();
 
+/**
+ * Helper to get the base proxy URL for rewriting relative paths
+ */
+function getBaseProxyUrl(req) {
+  const protocol = req.protocol;
+  const host = req.get('host');
+  return `${protocol}://${host}/api/toffee-proxy`;
+}
+
 router.get('/manifest', async (req, res) => {
   const { url } = req.query;
 
@@ -14,6 +23,7 @@ router.get('/manifest', async (req, res) => {
   // Auto-fetch headers from our service based on the URL
   const channel = await getToffeeChannelByUrl(url);
   const headers = channel?.headers || {};
+  const baseProxyUrl = getBaseProxyUrl(req);
 
   try {
     const response = await fetch(url, {
@@ -25,6 +35,7 @@ router.get('/manifest', async (req, res) => {
     });
 
     if (!response.ok) {
+      console.error(`[toffee-proxy] Upstream error ${response.status} for ${url}`);
       return res.status(response.status).send(`Upstream manifest error: ${response.status}`);
     }
 
@@ -44,7 +55,7 @@ router.get('/manifest', async (req, res) => {
             if (!uri.startsWith('http')) {
               absoluteUrl = new URL(uri, baseUrl).href;
             }
-            return `URI="/api/toffee-proxy/manifest?url=${encodeURIComponent(absoluteUrl)}"`;
+            return `URI="${baseProxyUrl}/manifest?url=${encodeURIComponent(absoluteUrl)}"`;
           });
         }
         return line;
@@ -62,7 +73,7 @@ router.get('/manifest', async (req, res) => {
       const isManifest = absoluteUrl.includes('.m3u8') || absoluteUrl.includes('playlist');
       const proxyPath = isManifest ? 'manifest' : 'segment';
 
-      return `/api/toffee-proxy/${proxyPath}?url=${encodeURIComponent(absoluteUrl)}`;
+      return `${baseProxyUrl}/${proxyPath}?url=${encodeURIComponent(absoluteUrl)}`;
     });
 
     res.set('Content-Type', 'application/vnd.apple.mpegurl');
