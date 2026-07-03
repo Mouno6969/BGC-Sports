@@ -33,7 +33,19 @@ router.get('/manifest', async (req, res) => {
     const lines = manifest.split('\n');
     const rewrittenLines = lines.map(line => {
       line = line.trim();
-      if (!line || line.startsWith('#')) {
+      if (!line) return '';
+      
+      if (line.startsWith('#')) {
+        // Handle variant playlists that might have URLs in the tag itself
+        if (line.includes('URI="')) {
+          return line.replace(/URI="([^"]+)"/g, (match, uri) => {
+            let absoluteUrl = uri;
+            if (!uri.startsWith('http')) {
+              absoluteUrl = new URL(uri, baseUrl).href;
+            }
+            return `URI="/api/toffee-proxy/manifest?url=${encodeURIComponent(absoluteUrl)}"`;
+          });
+        }
         return line;
       }
 
@@ -46,10 +58,9 @@ router.get('/manifest', async (req, res) => {
         return line;
       }
 
-      const isManifest = absoluteUrl.includes('.m3u8');
+      const isManifest = absoluteUrl.includes('.m3u8') || absoluteUrl.includes('playlist');
       const proxyPath = isManifest ? 'manifest' : 'segment';
 
-      // We no longer need to pass headers in the URL!
       return `/api/toffee-proxy/${proxyPath}?url=${encodeURIComponent(absoluteUrl)}`;
     });
 
