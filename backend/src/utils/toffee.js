@@ -4,7 +4,7 @@
 
 import fetch from 'node-fetch';
 
-const TOFFEE_DATA_URL = 'https://raw.githubusercontent.com/Gtajisan/Toffee-Auto-Update-Playlist/main/toffee_channel_data.json';
+const TOFFEE_DATA_URL = 'https://raw.githubusercontent.com/Gtajisan/Toffee-Auto-Update-Playlist/dev/toffee_data.json';
 
 let cachedChannels = [];
 let lastFetched = 0;
