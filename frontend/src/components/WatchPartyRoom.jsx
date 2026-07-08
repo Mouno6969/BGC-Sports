@@ -11,6 +11,8 @@ import {
   setStoredUsername,
   copyToClipboard,
 } from '../lib/utils.js';
+import { getProfile, getEffectiveName, getEffectiveAvatar, saveProfile } from '../lib/profile.js';
+import UserAvatar from './UserAvatar.jsx';
 import { showToast } from './Toast.jsx';
 import RoomCodeDisplay from './RoomCodeDisplay.jsx';
 
@@ -25,7 +27,7 @@ const ICE_SERVERS = [
 // ---------------------------------------------------------------------------
 // ParticipantTile — one user's video/avatar tile
 // ---------------------------------------------------------------------------
-function ParticipantTile({ stream, username, isLocal, mode, micMuted, camOff, speaking, volume }) {
+function ParticipantTile({ stream, username, avatar, isLocal, mode, micMuted, camOff, speaking, volume }) {
   const mediaRef = useRef(null);
   const gainNodeRef = useRef(null);
   const audioCtxRef = useRef(null);
@@ -60,9 +62,18 @@ function ParticipantTile({ stream, username, isLocal, mode, micMuted, camOff, sp
         <video ref={mediaRef} className="h-full w-full object-cover" autoPlay playsInline muted={isLocal} />
       ) : (
         <div className="flex flex-col items-center gap-1.5">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--accent-muted)] text-lg font-bold text-[var(--accent)]">
-            {initial}
-          </div>
+          {avatar ? (
+            <img
+              src={avatar}
+              alt={username}
+              className="h-12 w-12 rounded-full object-cover ring-2 ring-[var(--accent)]/40"
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
+          ) : (
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--accent-muted)] text-lg font-bold text-[var(--accent)]">
+              {initial}
+            </div>
+          )}
           {stream && <audio ref={mediaRef} autoPlay muted={isLocal} className="hidden" />}
         </div>
       )}
@@ -126,8 +137,9 @@ const JOIN_TIMEOUT_MS = 15000;
 
 export default function WatchPartyRoom({ partyCode = '' }) {
   const { connected } = useSocket();
-  const username = getStoredUsername() || 'Guest';
-  const [nameInput, setNameInput] = useState(getStoredUsername());
+  const username = getEffectiveName();
+  const myAvatar = getEffectiveAvatar();
+  const [nameInput, setNameInput] = useState(() => getProfile().displayName || getStoredUsername());
 
   // Room state
   const [room, setRoom] = useState(null);
@@ -199,13 +211,13 @@ export default function WatchPartyRoom({ partyCode = '' }) {
       return;
     }
     autoJoinAttemptedRef.current = true;
-    const u = (nameInput || '').trim() || 'Guest';
-    setStoredUsername(u);
+    const u = (nameInput || '').trim() || getEffectiveName();
+    if ((nameInput || '').trim()) setStoredUsername(u);
     setLobbyError(null);
     setBusy(true);
     startJoinTimeout();
     waitForSocketConnection()
-      .then(() => socket.emit('proom:join', { code, username: u }))
+      .then(() => socket.emit('proom:join', { code, username: u, avatar: getEffectiveAvatar() }))
       .catch((err) => {
         clearJoinTimeout();
         setBusy(false);
@@ -489,8 +501,13 @@ export default function WatchPartyRoom({ partyCode = '' }) {
 
   // ---- Actions ----
   function persistName() {
-    const u = (nameInput || '').trim() || 'Guest';
-    setStoredUsername(u);
+    const typed = (nameInput || '').trim();
+    // Empty input keeps the auto-generated guest identity (e.g. SwiftFalcon42).
+    const u = typed || getEffectiveName();
+    if (typed) {
+      setStoredUsername(typed);
+      saveProfile({ displayName: typed });
+    }
     return u;
   }
 
@@ -501,7 +518,7 @@ export default function WatchPartyRoom({ partyCode = '' }) {
     startJoinTimeout();
     try {
       await waitForSocketConnection();
-      socket.emit('proom:create', { username: u });
+      socket.emit('proom:create', { username: u, avatar: getEffectiveAvatar() });
     } catch (err) {
       clearJoinTimeout();
       setBusy(false);
@@ -526,7 +543,7 @@ export default function WatchPartyRoom({ partyCode = '' }) {
     startJoinTimeout();
     try {
       await waitForSocketConnection();
-      socket.emit('proom:join', { code, username: u });
+      socket.emit('proom:join', { code, username: u, avatar: getEffectiveAvatar() });
     } catch (err) {
       clearJoinTimeout();
       setBusy(false);
@@ -642,7 +659,7 @@ export default function WatchPartyRoom({ partyCode = '' }) {
           <input
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
-            placeholder="Your name"
+            placeholder={`Your name (or continue as ${getEffectiveName()})`}
             maxLength={24}
             className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-4 py-2.5 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30"
           />
@@ -773,6 +790,7 @@ export default function WatchPartyRoom({ partyCode = '' }) {
                   <ParticipantTile
                     stream={localStreamRef.current}
                     username={username}
+                    avatar={myAvatar}
                     isLocal
                     mode={callMode}
                     micMuted={micMuted}
@@ -787,6 +805,7 @@ export default function WatchPartyRoom({ partyCode = '' }) {
                   <ParticipantTile
                     stream={remoteStreams.get(p.id)}
                     username={p.username}
+                    avatar={p.avatar}
                     isLocal={false}
                     mode={p.mode}
                     micMuted={p.micMuted}
@@ -952,7 +971,8 @@ export default function WatchPartyRoom({ partyCode = '' }) {
                   {msg.system ? (
                     <span className="text-[10px] text-[var(--text-muted)] italic">{msg.text}</span>
                   ) : (
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
+                      <UserAvatar name={msg.username} avatar={msg.avatar} color={msg.color} size="xs" />
                       <span className="shrink-0 text-xs font-bold" style={{ color: msg.color || 'var(--accent)' }}>
                         {msg.username}:
                       </span>

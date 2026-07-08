@@ -19,6 +19,8 @@ import {
   setStoredUsername,
   copyToClipboard,
 } from '../lib/utils.js';
+import { getProfile, getEffectiveName, getEffectiveAvatar, saveProfile } from '../lib/profile.js';
+import UserAvatar from './UserAvatar.jsx';
 import { showToast } from './Toast.jsx';
 import RoomCodeDisplay from './RoomCodeDisplay.jsx';
 
@@ -48,7 +50,7 @@ function gridColumns(count) {
 // CallTile — one participant video/avatar tile.
 // Now supports `speaking` prop for active-speaker highlight.
 // ---------------------------------------------------------------------------
-function CallTile({ stream, username, isLocal, mode, micMuted, camOff, compact = false, speaking = false }) {
+function CallTile({ stream, username, avatar, isLocal, mode, micMuted, camOff, compact = false, speaking = false }) {
   const mediaRef = useRef(null);
   useEffect(() => {
     if (mediaRef.current && stream) mediaRef.current.srcObject = stream;
@@ -63,9 +65,18 @@ function CallTile({ stream, username, isLocal, mode, micMuted, camOff, compact =
         <video ref={mediaRef} className="h-full w-full object-cover" autoPlay playsInline muted={isLocal} />
       ) : (
         <div className="flex flex-col items-center gap-1">
-          <div className={`flex items-center justify-center rounded-full bg-gradient-to-br from-accent/20 to-secondary/20 font-bold text-white ring-2 ring-ink-500 ${compact ? 'h-7 w-7 text-xs' : 'h-10 w-10 text-sm'}`}>
-            {initial}
-          </div>
+          {avatar ? (
+            <img
+              src={avatar}
+              alt={username}
+              className={`rounded-full object-cover ring-2 ring-ink-500 ${compact ? 'h-7 w-7' : 'h-10 w-10'}`}
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
+          ) : (
+            <div className={`flex items-center justify-center rounded-full bg-gradient-to-br from-accent/20 to-secondary/20 font-bold text-white ring-2 ring-ink-500 ${compact ? 'h-7 w-7 text-xs' : 'h-10 w-10 text-sm'}`}>
+              {initial}
+            </div>
+          )}
           {stream && <audio ref={mediaRef} autoPlay muted={isLocal} className="hidden" />}
         </div>
       )}
@@ -102,8 +113,9 @@ function CallTile({ stream, username, isLocal, mode, micMuted, camOff, compact =
 
 export default function PrivateRoom() {
   // ---- identity ----
-  const username = getStoredUsername() || 'Guest';
-  const [nameInput, setNameInput] = useState(getStoredUsername());
+  const username = getEffectiveName();
+  const myAvatar = getEffectiveAvatar();
+  const [nameInput, setNameInput] = useState(() => getProfile().displayName || getStoredUsername());
 
   // ---- room state ----
   const [room, setRoom] = useState(null);        // { code, hostId, locked, isHost, members }
@@ -474,15 +486,20 @@ export default function PrivateRoom() {
 
   // ============================= actions =================================
   function persistName() {
-    const u = (nameInput || '').trim() || 'Guest';
-    setStoredUsername(u);
+    const typed = (nameInput || '').trim();
+    // Empty input keeps the auto-generated guest identity (e.g. SwiftFalcon42).
+    const u = typed || getEffectiveName();
+    if (typed) {
+      setStoredUsername(typed);
+      saveProfile({ displayName: typed });
+    }
     return u;
   }
 
   function handleCreate() {
     const u = persistName();
     setBusy(true);
-    socket.emit('proom:create', { username: u });
+    socket.emit('proom:create', { username: u, avatar: getEffectiveAvatar() });
   }
 
   function handleJoin(e) {
@@ -491,7 +508,7 @@ export default function PrivateRoom() {
     if (code.length < 4) { showToast('Enter a valid room code', 'error'); return; }
     const u = persistName();
     setBusy(true);
-    socket.emit('proom:join', { code, username: u });
+    socket.emit('proom:join', { code, username: u, avatar: getEffectiveAvatar() });
   }
 
   function teardownCall() {
@@ -785,6 +802,7 @@ export default function PrivateRoom() {
                       <CallTile
                         stream={localStreamRef.current}
                         username={username}
+                        avatar={myAvatar}
                         isLocal
                         mode={callMode}
                         micMuted={micMuted}
@@ -798,6 +816,7 @@ export default function PrivateRoom() {
                         key={p.id}
                         stream={remoteStreams.get(p.id)}
                         username={p.username}
+                        avatar={p.avatar}
                         isLocal={false}
                         mode={p.mode}
                         micMuted={p.micMuted}
@@ -867,9 +886,7 @@ export default function PrivateRoom() {
               return (
                 <li key={m.id} className="flex items-center justify-between gap-2 rounded-lg bg-[var(--bg-tertiary)]/40 px-2 py-1.5">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-black" style={{ backgroundColor: m.color || '#22c55e' }}>
-                      {(m.username || 'U').charAt(0).toUpperCase()}
-                    </span>
+                    <UserAvatar name={m.username} avatar={m.avatar} color={m.color} size="sm" />
                     <span className="truncate text-xs font-medium text-[var(--text-primary)]">
                       {m.username}{isMe ? ' (you)' : ''}
                     </span>
@@ -914,11 +931,12 @@ export default function PrivateRoom() {
             }
             return (
               <div key={m.id}>
-                <div className="flex items-baseline gap-2">
+                <div className="flex items-center gap-2">
+                  <UserAvatar name={m.username} avatar={m.avatar} color={m.color} size="xs" />
                   <span className="text-xs font-semibold" style={{ color: m.color }}>{m.username}</span>
                   <span className="text-[9px] text-[var(--text-muted)]">{formatTime(m.ts)}</span>
                 </div>
-                <div className="mt-0.5 break-words text-xs leading-relaxed text-[var(--text-secondary)]"
+                <div className="mt-0.5 ml-7 break-words text-xs leading-relaxed text-[var(--text-secondary)]"
                   dangerouslySetInnerHTML={{ __html: formatChatText(m.text) }} />
               </div>
             );

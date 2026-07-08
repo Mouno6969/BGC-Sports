@@ -42,10 +42,22 @@ export function formatChatText(text) {
     .replace(/_(.+?)_/g, '<em>$1</em>');
 }
 
-/** Persist + read a guest username from localStorage. */
+/**
+ * Persist + read a guest username from localStorage.
+ *
+ * These are kept for backwards compatibility, but now route through the
+ * profile system (lib/profile.js): reading returns the profile display name
+ * (falling back to the legacy stored value), and writing stores the name as
+ * the profile display name so it appears everywhere consistently.
+ */
 const USERNAME_KEY = 'bgc_username';
 export function getStoredUsername() {
   try {
+    const profileRaw = localStorage.getItem('bgc_profile');
+    if (profileRaw) {
+      const profile = JSON.parse(profileRaw);
+      if (profile && profile.displayName) return profile.displayName;
+    }
     return localStorage.getItem(USERNAME_KEY) || '';
   } catch {
     return '';
