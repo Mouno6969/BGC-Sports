@@ -449,6 +449,7 @@ export default function WatchPage() {
               </div>
             )}
 
+
             {/* Custom Controls Overlay */}
             <AnimatePresence>
               {showControls && !loading && !error && (
@@ -459,36 +460,42 @@ export default function WatchPage() {
                   className="absolute bottom-0 left-0 right-0 z-10"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
-                  <div className="relative flex items-center gap-2 px-3 py-2.5 md:px-4 md:py-3">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none" />
+                  <div className="relative flex items-center gap-1.5 px-2 py-2 md:px-4 md:py-3">
                     {/* Play/Pause */}
                     <button
                       type="button"
                       onClick={togglePlay}
-                      className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 transition-all active:scale-90"
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white transition-all active:scale-90"
                       aria-label={isPlaying ? 'Pause' : 'Play'}
                     >
                       {isPlaying ? (
-                        <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+                        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
                       ) : (
-                        <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                       )}
                     </button>
 
-                    {/* Volume */}
-                    <div className="hidden sm:flex items-center gap-1.5">
-                      <button onClick={toggleMute} className="text-white/80 hover:text-white transition-colors">
-                        {muted || volume === 0 ? (
-                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-                          </svg>
-                        ) : (
-                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072M12 6v12m-3.536-9.536a5 5 0 000 7.072M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                          </svg>
-                        )}
-                      </button>
+                    {/* Mute/Unmute — always visible on all devices */}
+                    <button
+                      onClick={toggleMute}
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white transition-all active:scale-90"
+                      aria-label={muted ? 'Unmute' : 'Mute'}
+                    >
+                      {muted || volume === 0 ? (
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                        </svg>
+                      ) : (
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072M12 6v12m-3.536-9.536a5 5 0 000 7.072M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                        </svg>
+                      )}
+                    </button>
+
+                    {/* Volume slider — desktop only */}
+                    <div className="hidden sm:flex items-center">
                       <input
                         type="range"
                         min="0" max="1" step="0.05"
@@ -504,10 +511,10 @@ export default function WatchPage() {
                     <div className="relative">
                       <button
                         onClick={() => setShowQualityMenu((v) => !v)}
-                        className="flex items-center gap-1 rounded-md bg-white/10 backdrop-blur-sm px-2 py-1 text-[10px] font-bold text-white hover:bg-white/20 transition-all active:scale-95"
+                        className="flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-[10px] font-bold text-white transition-all active:scale-95"
                         title="Video Quality"
                       >
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
@@ -519,7 +526,7 @@ export default function WatchPage() {
                             initial={{ opacity: 0, y: 4 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 4 }}
-                            className="absolute bottom-full right-0 mb-1 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)]/95 backdrop-blur-md shadow-xl overflow-hidden min-w-[120px]"
+                            className="absolute bottom-full right-0 mb-1 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] shadow-xl overflow-hidden min-w-[120px]"
                           >
                             <button
                               onClick={() => switchQuality(-1)}
@@ -549,7 +556,7 @@ export default function WatchPage() {
                     {/* Fit to Screen */}
                     <button
                       onClick={toggleFitToScreen}
-                      className={`flex h-7 w-7 items-center justify-center rounded-md backdrop-blur-sm transition-all active:scale-90 ${fitToScreen ? 'bg-[var(--accent)]/30 text-[var(--accent)]' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                      className={`flex h-8 w-8 items-center justify-center rounded-full transition-all active:scale-90 ${fitToScreen ? 'bg-[var(--accent)]/30 text-[var(--accent)]' : 'bg-black/60 text-white'}`}
                       title={fitToScreen ? 'Fit to screen' : 'Fill screen'}
                     >
                       <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -567,7 +574,7 @@ export default function WatchPage() {
                             else await videoRef.current.requestPictureInPicture();
                           } catch (e) { console.warn('PiP error:', e); }
                         }}
-                        className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 transition-all active:scale-90"
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition-all active:scale-90"
                         title="Picture-in-Picture"
                       >
                         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -579,7 +586,7 @@ export default function WatchPage() {
                     {/* Fullscreen */}
                     <button
                       onClick={toggleFullscreen}
-                      className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 transition-all active:scale-90"
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition-all active:scale-90"
                       title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
                     >
                       {isFullscreen ? (
@@ -596,48 +603,47 @@ export default function WatchPage() {
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
 
-          {/* Channel Info Bar — Matching mockup: logo + name + Sports badge + Share */}
-          <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-3 py-2.5 sm:px-4 sm:py-3">
-            <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+
+          {/* Channel Info Bar — Fixed positioning, no text overlap */}
+          <div className="flex items-center gap-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-3 py-2.5 sm:px-4 sm:py-3">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
               {logo && logo.startsWith('http') && (
                 <img src={logo} alt={name} className="h-9 w-9 shrink-0 rounded-lg object-contain bg-[var(--bg-tertiary)] p-1 sm:h-10 sm:w-10" />
               )}
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <h1 className="truncate font-display text-sm font-bold text-[var(--text-primary)] sm:text-base">{name}</h1>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="rounded-md bg-[var(--accent)] px-2.5 py-0.5 text-[10px] font-bold text-white">
+                <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                  <span className="shrink-0 rounded-md bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold text-white">
                     Sports
                   </span>
                   <LiveBadge />
                   {availableLevels.length > 0 && (
-                    <span className="text-[10px] text-[var(--text-muted)]">{currentQualityLabel}</span>
+                    <span className="shrink-0 text-[10px] text-[var(--text-muted)]">{currentQualityLabel}</span>
                   )}
-
                 </div>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1.5">
               <button
                 onClick={() => {
                   navigator.clipboard?.writeText(window.location.href);
                 }}
-                className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-primary)] px-2.5 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors active:scale-95 sm:px-3"
+                className="flex h-8 items-center gap-1 rounded-lg border border-[var(--border-primary)] px-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors active:scale-95 sm:px-3 sm:gap-1.5"
               >
                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                 </svg>
-                Share
+                <span className="hidden sm:inline">Share</span>
               </button>
               <button
                 onClick={() => setShowChat(!showChat)}
-                className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-primary)] px-3 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors active:scale-95 lg:hidden"
+                className="flex h-8 items-center gap-1 rounded-lg border border-[var(--border-primary)] px-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors active:scale-95 lg:hidden sm:px-3 sm:gap-1.5"
               >
                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
-                {showChat ? 'Hide' : 'Chat'}
+                <span className="hidden sm:inline">{showChat ? 'Hide' : 'Chat'}</span>
               </button>
             </div>
           </div>
