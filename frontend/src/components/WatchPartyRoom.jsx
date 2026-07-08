@@ -140,6 +140,12 @@ export default function WatchPartyRoom({ partyCode = '' }) {
 
   // Speaking detection
   const [speakingIds, setSpeakingIds] = useState(new Set());
+
+  // Chat state
+  const [messages, setMessages] = useState([]);
+  const [draft, setDraft] = useState('');
+  const chatRef = useRef(null);
+  const [showRoomChat, setShowRoomChat] = useState(true);
   const monitorsRef = useRef(new Map());
   const rafIdRef = useRef(null);
   const SPEAK_THRESHOLD = 0.015;
@@ -185,6 +191,25 @@ export default function WatchPartyRoom({ partyCode = '' }) {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyCode, room, busy]);
+
+  // Auto-join the active call when entering a room that already has participants in a call.
+  // This triggers once when `members` first populates after joining.
+  const autoCallAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (!room || inCall || connecting || autoCallAttemptedRef.current) return;
+    // Check if any other member is already in a call
+    const activeCallMembers = members.filter((m) => m.inCall && m.id !== mySocketId);
+    if (activeCallMembers.length > 0) {
+      autoCallAttemptedRef.current = true;
+      // Determine the mode: if any member is in video mode, join as video; otherwise audio
+      const hasVideo = activeCallMembers.some((m) => m.callMode === 'video');
+      const mode = hasVideo ? 'video' : 'audio';
+      // Auto-join the call after a brief delay to let the UI settle
+      setTimeout(() => {
+        joinCall(mode);
+      }, 500);
+    }
+  }, [room, members, inCall, connecting]);
 
   function clearJoinTimeout() {
     if (joinTimeoutRef.current) {
@@ -275,13 +300,15 @@ export default function WatchPartyRoom({ partyCode = '' }) {
       setBusy(false);
       setLobbyError(null);
       applyRoom(r);
+      setMessages([]);
       showToast(`Room created — code ${r.code}`, 'success');
     }
-    function onJoined({ room: r }) {
+    function onJoined({ room: r, chat }) {
       clearJoinTimeout();
       setBusy(false);
       setLobbyError(null);
       applyRoom(r);
+      setMessages(chat || []);
       showToast(`Joined room ${r.code}`, 'success');
     }
     function onError({ error }) {
@@ -296,10 +323,15 @@ export default function WatchPartyRoom({ partyCode = '' }) {
     function onLocked({ locked: l }) { setLocked(Boolean(l)); }
     function onKicked() { showToast('You were removed from the room', 'error'); hardLeave(); }
 
+    function onChat(msg) {
+      setMessages((prev) => [...prev.slice(-200), msg]);
+    }
+
     socket.on('proom:created', onCreated);
     socket.on('proom:joined', onJoined);
     socket.on('proom:error', onError);
     socket.on('proom:members', onMembers);
+    socket.on('proom:chat', onChat);
     socket.on('proom:host-changed', onHostChanged);
     socket.on('proom:locked', onLocked);
     socket.on('proom:kicked', onKicked);
@@ -309,6 +341,7 @@ export default function WatchPartyRoom({ partyCode = '' }) {
       socket.off('proom:joined', onJoined);
       socket.off('proom:error', onError);
       socket.off('proom:members', onMembers);
+      socket.off('proom:chat', onChat);
       socket.off('proom:host-changed', onHostChanged);
       socket.off('proom:locked', onLocked);
       socket.off('proom:kicked', onKicked);
@@ -334,6 +367,11 @@ export default function WatchPartyRoom({ partyCode = '' }) {
       if (id !== 'local' && !remoteStreams.has(id)) stopMonitor(id);
     });
   }, [remoteStreams]);
+
+  // Auto-scroll chat
+  useEffect(() => {
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+  }, [messages]);
 
   // ---- Peer connection ----
   const createPeerConnection = useCallback((peerId, isInitiator) => {
@@ -538,6 +576,14 @@ export default function WatchPartyRoom({ partyCode = '' }) {
     showToast(ok ? 'Invite link copied!' : 'Copy failed', ok ? 'success' : 'error');
   }
 
+  function sendChat(e) {
+    e?.preventDefault();
+    const text = draft.trim();
+    if (!text || !room) return;
+    socket.emit('proom:chat', { text });
+    setDraft('');
+  }
+
   function isSpeaking(participantId, isMuted) {
     if (isMuted) return false;
     if (participantId === mySocketId) return speakingIds.has('local') && !micMuted;
@@ -620,6 +666,7 @@ export default function WatchPartyRoom({ partyCode = '' }) {
   const myCallParticipant = callParticipants.find((p) => p.id === mySocketId);
   const totalInCall = callParticipants.length;
   const emptySlots = Math.max(0, MAX_SLOTS - totalInCall);
+  const activeCallExists = members.some((m) => m.inCall);
 
   return (
     <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden">
@@ -661,7 +708,14 @@ export default function WatchPartyRoom({ partyCode = '' }) {
                 {callError}
               </div>
             )}
-            <p className="text-sm text-[var(--text-secondary)]">Join the call to watch together with others</p>
+            {activeCallExists && (
+              <div className="rounded-lg bg-[var(--accent-muted)] border border-[var(--accent)]/30 px-4 py-2.5 text-sm text-[var(--accent)] text-center">
+                A call is already in progress — join to connect with others!
+              </div>
+            )}
+            <p className="text-sm text-[var(--text-secondary)]">
+              {connecting ? 'Connecting to call...' : 'Join the call to watch together with others'}
+            </p>
             <div className="flex gap-3">
               <button
                 onClick={() => joinCall('video')}
@@ -789,6 +843,75 @@ export default function WatchPartyRoom({ partyCode = '' }) {
                 <span className="hidden sm:inline">Invite Friends</span>
               </button>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Room Chat Section */}
+      <div className="border-t border-[var(--border-primary)]">
+        <button
+          onClick={() => setShowRoomChat(!showRoomChat)}
+          className="flex w-full items-center justify-between px-4 py-2.5 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <svg className="h-4 w-4 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            Room Chat
+            {messages.length > 0 && (
+              <span className="rounded-full bg-[var(--accent-muted)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--accent)]">
+                {messages.length}
+              </span>
+            )}
+          </div>
+          <svg className={`h-4 w-4 text-[var(--text-muted)] transition-transform ${showRoomChat ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {showRoomChat && (
+          <div className="border-t border-[var(--border-primary)]">
+            {/* Messages */}
+            <div
+              ref={chatRef}
+              className="h-48 overflow-y-auto px-4 py-3 space-y-2 scrollbar-thin"
+            >
+              {messages.length === 0 && (
+                <p className="text-center text-xs text-[var(--text-muted)] py-4">No messages yet. Say hello!</p>
+              )}
+              {messages.map((msg) => (
+                <div key={msg.id} className={msg.system ? 'text-center' : ''}>
+                  {msg.system ? (
+                    <span className="text-[10px] text-[var(--text-muted)] italic">{msg.text}</span>
+                  ) : (
+                    <div className="flex gap-2">
+                      <span className="shrink-0 text-xs font-bold" style={{ color: msg.color || 'var(--accent)' }}>
+                        {msg.username}:
+                      </span>
+                      <span className="text-xs text-[var(--text-secondary)] break-words min-w-0">{msg.text}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Composer */}
+            <form onSubmit={sendChat} className="flex gap-2 border-t border-[var(--border-primary)] px-4 py-2.5">
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Type a message..."
+                maxLength={500}
+                className="flex-1 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-3 py-2 text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30"
+              />
+              <button
+                type="submit"
+                disabled={!draft.trim()}
+                className="shrink-0 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-bold text-white transition-all hover:bg-[var(--accent-dark)] active:scale-[0.95] disabled:opacity-40"
+              >
+                Send
+              </button>
+            </form>
           </div>
         )}
       </div>
