@@ -72,7 +72,7 @@ export function registerChatHandlers(io, socket) {
 
     socket.join(PUBLIC_CHANNEL);
 
-    socket.emit('chat:welcome', { username, color });
+    socket.emit('chat:welcome', { username, color, avatar });
     socket.emit('chat:history', history);
 
     // Broadcast updated online count.
@@ -95,10 +95,15 @@ export function registerChatHandlers(io, socket) {
     if (!socket.data.chat.username) return;
     const username = sanitizeUsername(payload.username);
     if (username) socket.data.chat.username = username;
-    socket.data.chat.avatar = sanitizeAvatar(payload.avatar);
+    // Only touch the avatar when the caller explicitly provides the field
+    // (an empty string intentionally clears it); mirrors the username guard.
+    if (payload.avatar !== undefined) {
+      socket.data.chat.avatar = sanitizeAvatar(payload.avatar);
+    }
     socket.emit('chat:welcome', {
       username: socket.data.chat.username,
       color: socket.data.chat.color,
+      avatar: socket.data.chat.avatar,
     });
   });
 

@@ -22,13 +22,21 @@ export default function ProfileSettingsModal({ open, onClose }) {
   const [avatarError, setAvatarError] = useState(null);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef(null);
+  const panelRef = useRef(null);
+  const triggerRef = useRef(null);
   const guestName = getGuestName();
 
-  // Reload the saved profile every time the modal opens.
+  // Reload the saved profile every time the modal opens, remember the
+  // element that opened it, and move focus to the first field.
   useEffect(() => {
     if (open) {
       setForm(getProfile());
       setAvatarError(null);
+      triggerRef.current = document.activeElement;
+      requestAnimationFrame(() => {
+        const firstInput = panelRef.current?.querySelector('input, textarea, button');
+        firstInput?.focus();
+      });
     }
   }, [open]);
 
@@ -39,6 +47,37 @@ export default function ProfileSettingsModal({ open, onClose }) {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose]);
+
+  // Trap Tab / Shift+Tab inside the dialog while it is open.
+  useEffect(() => {
+    if (!open) return undefined;
+    const handler = (e) => {
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const focusable = panelRef.current.querySelectorAll(
+        'input:not([type="hidden"]):not(.hidden), textarea, button, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [open]);
+
+  // Restore focus to the triggering element when the modal closes.
+  useEffect(() => {
+    if (!open && triggerRef.current) {
+      triggerRef.current.focus?.();
+      triggerRef.current = null;
+    }
+  }, [open]);
 
   if (!open) return null;
 
@@ -89,7 +128,10 @@ export default function ProfileSettingsModal({ open, onClose }) {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Panel */}
-      <div className="relative w-full max-w-md max-h-[90vh] overflow-y-auto scrollbar-thin rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-5 shadow-2xl">
+      <div
+        ref={panelRef}
+        className="relative w-full max-w-md max-h-[90vh] overflow-y-auto scrollbar-thin rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-5 shadow-2xl"
+      >
         <div className="mb-4 flex items-start justify-between">
           <div>
             <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">Profile Settings</h2>

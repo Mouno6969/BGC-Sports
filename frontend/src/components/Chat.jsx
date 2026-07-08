@@ -61,7 +61,7 @@ export default function Chat() {
   // Live-update chat identity when the user edits their profile.
   useEffect(() => {
     return onProfileChange((profile) => {
-      const name = profile.displayName || getGuestName();
+      const name = profile.displayName || getEffectiveName();
       setNameInput(profile.displayName || '');
       if (joined) {
         socket.emit('chat:update-profile', { username: name, avatar: profile.avatar });

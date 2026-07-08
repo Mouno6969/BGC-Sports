@@ -76,6 +76,28 @@ function callRoomName(code) {
   return `proom-call:${code}`;
 }
 
+// Shared shape for a member appearing in the in-call participants list.
+// Used by both the join handler and broadcastCallParticipants so the two
+// payloads never diverge when new fields are added.
+function toCallParticipant(m) {
+  return {
+    id: m.id,
+    username: m.username,
+    avatar: m.avatar || '',
+    mode: m.callMode,
+    micMuted: m.micMuted,
+    camOff: m.camOff,
+    forceMuted: m.forceMuted,
+  };
+}
+
+function callParticipants(code) {
+  return store
+    .memberList(code)
+    .filter((m) => m.inCall)
+    .map(toCallParticipant);
+}
+
 export function registerPrivateRoomHandlers(io, socket) {
   socket.data.proom = { code: null };
 
@@ -145,18 +167,7 @@ export function registerPrivateRoomHandlers(io, socket) {
 
     // Send the current call participants list to the newly joined user
     // so they know if a call is already in progress and can auto-join.
-    const callList = store
-      .memberList(result.room.code)
-      .filter((m) => m.inCall)
-      .map((m) => ({
-        id: m.id,
-        username: m.username,
-        avatar: m.avatar || '',
-        mode: m.callMode,
-        micMuted: m.micMuted,
-        camOff: m.camOff,
-        forceMuted: m.forceMuted,
-      }));
+    const callList = callParticipants(result.room.code);
     if (callList.length > 0) {
       socket.emit('proom:call-participants', callList);
     }
@@ -451,17 +462,5 @@ function broadcastMembers(io, code) {
 function broadcastCallParticipants(io, code) {
   const room = store.getRoom(code);
   if (!room) return;
-  const list = store
-    .memberList(code)
-    .filter((m) => m.inCall)
-    .map((m) => ({
-      id: m.id,
-      username: m.username,
-      avatar: m.avatar || '',
-      mode: m.callMode,
-      micMuted: m.micMuted,
-      camOff: m.camOff,
-      forceMuted: m.forceMuted,
-    }));
-  io.to(callRoomName(code)).emit('proom:call-participants', list);
+  io.to(callRoomName(code)).emit('proom:call-participants', callParticipants(code));
 }

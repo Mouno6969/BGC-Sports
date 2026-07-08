@@ -2,6 +2,8 @@
 // Small UI utilities.
 // ---------------------------------------------------------------------------
 
+import { saveProfile } from './profile.js';
+
 /** Format a unix-ms timestamp as HH:MM (24h, local). */
 export function formatTime(ts) {
   const d = new Date(ts);
@@ -69,4 +71,7 @@ export function setStoredUsername(name) {
   } catch {
     /* ignore */
   }
+  // Keep the profile system in sync so the name written here is the one
+  // surfaced by getStoredUsername/getEffectiveName everywhere.
+  saveProfile({ displayName: name });
 }
