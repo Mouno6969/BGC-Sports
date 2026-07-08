@@ -25,11 +25,31 @@ const ICE_SERVERS = [
 // ---------------------------------------------------------------------------
 // ParticipantTile — one user's video/avatar tile
 // ---------------------------------------------------------------------------
-function ParticipantTile({ stream, username, isLocal, mode, micMuted, camOff, speaking }) {
+function ParticipantTile({ stream, username, isLocal, mode, micMuted, camOff, speaking, volume }) {
   const mediaRef = useRef(null);
+  const gainNodeRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const sourceNodeRef = useRef(null);
+
   useEffect(() => {
     if (mediaRef.current && stream) mediaRef.current.srcObject = stream;
   }, [stream]);
+
+  // Apply volume control via Web Audio GainNode for remote participants
+  useEffect(() => {
+    if (isLocal || !stream || volume === undefined) return;
+
+    // For video elements, just set the volume directly
+    if (mediaRef.current && mediaRef.current.tagName === 'VIDEO') {
+      mediaRef.current.volume = volume;
+      return;
+    }
+
+    // For audio elements, also set volume directly (simpler and more reliable)
+    if (mediaRef.current && mediaRef.current.tagName === 'AUDIO') {
+      mediaRef.current.volume = volume;
+    }
+  }, [volume, isLocal, stream]);
 
   const showVideo = stream && mode === 'video' && !camOff;
   const initial = (username || 'U').charAt(0).toUpperCase();
@@ -131,6 +151,10 @@ export default function WatchPartyRoom({ partyCode = '' }) {
   const [camOff, setCamOff] = useState(false);
   const [forceMuted, setForceMuted] = useState(false);
   const [callError, setCallError] = useState(null);
+
+  // Call volume control (0.0 to 1.0) — controls remote participants' audio
+  const [callVolume, setCallVolume] = useState(0.75);
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
   const localStreamRef = useRef(null);
   const peersRef = useRef(new Map());
@@ -714,6 +738,7 @@ export default function WatchPartyRoom({ partyCode = '' }) {
                     micMuted={p.micMuted}
                     camOff={p.camOff}
                     speaking={isSpeaking(p.id, p.micMuted)}
+                    volume={callVolume}
                   />
                 </div>
               ))}
@@ -788,6 +813,49 @@ export default function WatchPartyRoom({ partyCode = '' }) {
                 </svg>
                 <span className="hidden sm:inline">Invite Friends</span>
               </button>
+            </div>
+
+            {/* Call Audio Volume Control */}
+            <div className="flex items-center gap-3 pt-3 border-t border-[var(--border-primary)]">
+              <button
+                onClick={() => setShowVolumeSlider(!showVolumeSlider)}
+                title="Adjust call volume"
+                className="flex items-center gap-2 rounded-lg border border-[var(--border-secondary)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-card-hover)] active:scale-[0.95]"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  {callVolume === 0 ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                  ) : callVolume < 0.5 ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  )}
+                </svg>
+                <span className="text-xs">Call Volume</span>
+              </button>
+
+              {showVolumeSlider && (
+                <div className="flex flex-1 items-center gap-3">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round(callVolume * 100)}
+                    onChange={(e) => setCallVolume(Number(e.target.value) / 100)}
+                    className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-[var(--border-secondary)] accent-[var(--accent)] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--accent)] [&::-webkit-slider-thumb]:shadow-md [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--accent)] [&::-moz-range-thumb]:border-0"
+                  />
+                  <span className="shrink-0 w-9 text-right text-xs font-semibold text-[var(--text-secondary)]">
+                    {Math.round(callVolume * 100)}%
+                  </span>
+                </div>
+              )}
+
+              {!showVolumeSlider && (
+                <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                  <span>Volume: {Math.round(callVolume * 100)}%</span>
+                  {callVolume === 0 && <span className="text-red-400">(Muted)</span>}
+                </div>
+              )}
             </div>
           </div>
         )}
