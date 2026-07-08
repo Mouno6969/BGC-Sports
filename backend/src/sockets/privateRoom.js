@@ -136,6 +136,23 @@ export function registerPrivateRoomHandlers(io, socket) {
     io.to(result.room.code).emit('proom:chat', sys);
 
     broadcastMembers(io, result.room.code);
+
+    // Send the current call participants list to the newly joined user
+    // so they know if a call is already in progress and can auto-join.
+    const callList = store
+      .memberList(result.room.code)
+      .filter((m) => m.inCall)
+      .map((m) => ({
+        id: m.id,
+        username: m.username,
+        mode: m.callMode,
+        micMuted: m.micMuted,
+        camOff: m.camOff,
+        forceMuted: m.forceMuted,
+      }));
+    if (callList.length > 0) {
+      socket.emit('proom:call-participants', callList);
+    }
   });
 
   // ----- Leave a private room ----------------------------------------------
