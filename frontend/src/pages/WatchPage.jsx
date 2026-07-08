@@ -603,7 +603,7 @@ export default function WatchPage() {
                 </motion.div>
               )}
             </AnimatePresence>
-
+          </div>
 
           {/* Channel Info Bar — Fixed positioning, no text overlap */}
           <div className="flex items-center gap-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-3 py-2.5 sm:px-4 sm:py-3">
