@@ -4,13 +4,15 @@
 // Shows a 5x2 grid (desktop) or 3+2+... (mobile) with empty slot placeholders.
 // ---------------------------------------------------------------------------
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { socket } from '../lib/socket.js';
+import { socket, sanitizeRoomCode, waitForSocketConnection } from '../lib/socket.js';
+import { useSocket } from '../hooks/useSocket.js';
 import {
   getStoredUsername,
   setStoredUsername,
   copyToClipboard,
 } from '../lib/utils.js';
 import { showToast } from './Toast.jsx';
+import RoomCodeDisplay from './RoomCodeDisplay.jsx';
 
 const MAX_SLOTS = 10;
 
@@ -99,7 +101,11 @@ function EmptySlotTile() {
 // ---------------------------------------------------------------------------
 // WatchPartyRoom — Main exported component
 // ---------------------------------------------------------------------------
-export default function WatchPartyRoom() {
+const ROOM_CODE_LEN = 6;
+const JOIN_TIMEOUT_MS = 15000;
+
+export default function WatchPartyRoom({ partyCode = '' }) {
+  const { connected } = useSocket();
   const username = getStoredUsername() || 'Guest';
   const [nameInput, setNameInput] = useState(getStoredUsername());
 
@@ -108,8 +114,13 @@ export default function WatchPartyRoom() {
   const [members, setMembers] = useState([]);
   const [hostId, setHostId] = useState(null);
   const [locked, setLocked] = useState(false);
-  const [joinCode, setJoinCode] = useState('');
+  const [joinCode, setJoinCode] = useState(() => sanitizeRoomCode(partyCode));
   const [busy, setBusy] = useState(false);
+  const [lobbyError, setLobbyError] = useState(null);
+  const [codeCopied, setCodeCopied] = useState(false);
+  const roomRef = useRef(null);
+  const joinTimeoutRef = useRef(null);
+  const autoJoinAttemptedRef = useRef(false);
 
   // Call state
   const [inCall, setInCall] = useState(false);
@@ -136,6 +147,61 @@ export default function WatchPartyRoom() {
 
   const isHost = hostId === socket.id;
   const mySocketId = socket.id;
+
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
+
+  useEffect(() => {
+    const code = sanitizeRoomCode(partyCode);
+    if (code) setJoinCode(code);
+  }, [partyCode]);
+
+  // Auto-join when opened via invite link (?party=CODE).
+  useEffect(() => {
+    const code = sanitizeRoomCode(partyCode);
+    if (
+      autoJoinAttemptedRef.current ||
+      room ||
+      busy ||
+      code.length !== ROOM_CODE_LEN
+    ) {
+      return;
+    }
+    autoJoinAttemptedRef.current = true;
+    const u = (nameInput || '').trim() || 'Guest';
+    setStoredUsername(u);
+    setLobbyError(null);
+    setBusy(true);
+    startJoinTimeout();
+    waitForSocketConnection()
+      .then(() => socket.emit('proom:join', { code, username: u }))
+      .catch((err) => {
+        clearJoinTimeout();
+        setBusy(false);
+        const msg = err.message || 'Could not connect to the server';
+        setLobbyError(msg);
+        showToast(msg, 'error');
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partyCode, room, busy]);
+
+  function clearJoinTimeout() {
+    if (joinTimeoutRef.current) {
+      clearTimeout(joinTimeoutRef.current);
+      joinTimeoutRef.current = null;
+    }
+  }
+
+  function startJoinTimeout() {
+    clearJoinTimeout();
+    joinTimeoutRef.current = setTimeout(() => {
+      setBusy(false);
+      const msg = 'Join timed out. Check the code and your connection, then try again.';
+      setLobbyError(msg);
+      showToast(msg, 'error');
+    }, JOIN_TIMEOUT_MS);
+  }
 
   // ---- Audio monitoring ----
   function monitorStream(id, stream) {
@@ -204,9 +270,27 @@ export default function WatchPartyRoom() {
   // ---- Room socket listeners ----
   useEffect(() => {
     function applyRoom(r) { setRoom(r); setMembers(r.members || []); setHostId(r.hostId); setLocked(Boolean(r.locked)); }
-    function onCreated({ room: r }) { setBusy(false); applyRoom(r); showToast(`Room created — code ${r.code}`, 'success'); }
-    function onJoined({ room: r }) { setBusy(false); applyRoom(r); showToast(`Joined room ${r.code}`, 'success'); }
-    function onError({ error }) { setBusy(false); showToast(error || 'Room error', 'error'); }
+    function onCreated({ room: r }) {
+      clearJoinTimeout();
+      setBusy(false);
+      setLobbyError(null);
+      applyRoom(r);
+      showToast(`Room created — code ${r.code}`, 'success');
+    }
+    function onJoined({ room: r }) {
+      clearJoinTimeout();
+      setBusy(false);
+      setLobbyError(null);
+      applyRoom(r);
+      showToast(`Joined room ${r.code}`, 'success');
+    }
+    function onError({ error }) {
+      clearJoinTimeout();
+      setBusy(false);
+      const msg = error || 'Room error';
+      setLobbyError(msg);
+      showToast(msg, 'error');
+    }
     function onMembers({ hostId: h, locked: l, members: m }) { setHostId(h); setLocked(Boolean(l)); setMembers(m || []); }
     function onHostChanged({ hostId: h }) { setHostId(h); if (h === socket.id) showToast('You are now the host', 'success'); }
     function onLocked({ locked: l }) { setLocked(Boolean(l)); }
@@ -232,7 +316,12 @@ export default function WatchPartyRoom() {
   }, []);
 
   useEffect(() => {
-    return () => { stopAllMonitors(); teardownCall(); socket.emit('proom:leave'); };
+    return () => {
+      clearJoinTimeout();
+      stopAllMonitors();
+      teardownCall();
+      if (roomRef.current) socket.emit('proom:leave');
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -343,15 +432,46 @@ export default function WatchPartyRoom() {
     return u;
   }
 
-  function handleCreate() { const u = persistName(); setBusy(true); socket.emit('proom:create', { username: u }); }
-
-  function handleJoin(e) {
-    e?.preventDefault();
-    const code = joinCode.trim().toUpperCase();
-    if (code.length < 4) { showToast('Enter a valid room code', 'error'); return; }
+  async function handleCreate() {
     const u = persistName();
+    setLobbyError(null);
     setBusy(true);
-    socket.emit('proom:join', { code, username: u });
+    startJoinTimeout();
+    try {
+      await waitForSocketConnection();
+      socket.emit('proom:create', { username: u });
+    } catch (err) {
+      clearJoinTimeout();
+      setBusy(false);
+      const msg = err.message || 'Could not connect to the server';
+      setLobbyError(msg);
+      showToast(msg, 'error');
+    }
+  }
+
+  async function handleJoin(e) {
+    e?.preventDefault();
+    const code = sanitizeRoomCode(joinCode);
+    if (code.length !== ROOM_CODE_LEN) {
+      const msg = `Enter a valid ${ROOM_CODE_LEN}-character room code`;
+      setLobbyError(msg);
+      showToast(msg, 'error');
+      return;
+    }
+    const u = persistName();
+    setLobbyError(null);
+    setBusy(true);
+    startJoinTimeout();
+    try {
+      await waitForSocketConnection();
+      socket.emit('proom:join', { code, username: u });
+    } catch (err) {
+      clearJoinTimeout();
+      setBusy(false);
+      const msg = err.message || 'Could not connect to the server';
+      setLobbyError(msg);
+      showToast(msg, 'error');
+    }
   }
 
   function teardownCall() {
@@ -409,8 +529,13 @@ export default function WatchPartyRoom() {
 
   async function copyCode() {
     if (!room) return;
-    const ok = await copyToClipboard(room.code);
-    showToast(ok ? 'Room code copied!' : 'Copy failed', ok ? 'success' : 'error');
+    const inviteUrl = `${window.location.origin}/watch?party=${room.code}`;
+    const ok = await copyToClipboard(inviteUrl);
+    if (ok) {
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    }
+    showToast(ok ? 'Invite link copied!' : 'Copy failed', ok ? 'success' : 'error');
   }
 
   function isSpeaking(participantId, isMuted) {
@@ -434,6 +559,16 @@ export default function WatchPartyRoom() {
         </p>
 
         <div className="max-w-md mx-auto space-y-4">
+          {!connected && (
+            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2.5 text-sm text-yellow-200">
+              Connecting to server…
+            </div>
+          )}
+          {lobbyError && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-300" role="alert">
+              {lobbyError}
+            </div>
+          )}
           <input
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
@@ -455,20 +590,24 @@ export default function WatchPartyRoom() {
             <div className="h-px flex-1 bg-[var(--border-primary)]" />
           </div>
 
-          <form onSubmit={handleJoin} className="flex gap-2">
+          <form onSubmit={handleJoin} className="space-y-3">
+            <label className="type-label block text-center text-[var(--text-muted)]">Enter room code</label>
             <input
               value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              placeholder="Room code"
-              maxLength={6}
-              className="flex-1 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-4 py-2.5 text-sm font-mono font-bold tracking-widest text-[var(--text-primary)] uppercase outline-none placeholder:text-[var(--text-muted)] placeholder:tracking-normal placeholder:font-normal focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30"
+              onChange={(e) => setJoinCode(sanitizeRoomCode(e.target.value))}
+              placeholder="ABC123"
+              maxLength={ROOM_CODE_LEN}
+              inputMode="text"
+              autoComplete="off"
+              spellCheck={false}
+              className="room-code-input w-full rounded-xl border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-4 py-3.5 text-[var(--text-primary)] outline-none placeholder:tracking-normal placeholder:font-normal placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
             />
             <button
               type="submit"
               disabled={busy}
-              className="rounded-lg border border-[var(--accent)]/30 bg-[var(--accent-muted)] px-5 py-2.5 text-sm font-bold text-[var(--accent)] transition-all hover:bg-[var(--accent)]/20 active:scale-[0.98] disabled:opacity-60"
+              className="w-full rounded-lg border border-[var(--accent)]/30 bg-[var(--accent-muted)] px-5 py-2.5 text-sm font-bold text-[var(--accent)] transition-all hover:bg-[var(--accent)]/20 active:scale-[0.98] disabled:opacity-60"
             >
-              Join
+              {busy ? 'Joining...' : 'Join Room'}
             </button>
           </form>
         </div>
@@ -485,37 +624,32 @@ export default function WatchPartyRoom() {
   return (
     <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--border-primary)] px-4 py-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="h-5 w-1 rounded-full bg-[var(--accent)]" />
-          <h2 className="font-display text-base font-bold text-[var(--text-primary)]">Watch Party Room</h2>
-          <span className="rounded-full bg-[var(--accent-muted)] px-2.5 py-0.5 text-xs font-semibold text-[var(--accent)]">
-            {totalInCall}/{MAX_SLOTS} users
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={copyCode}
-            className="flex items-center gap-1.5 rounded-lg bg-[var(--bg-tertiary)] px-2.5 py-1.5 text-xs font-mono font-bold tracking-wider text-[var(--text-secondary)] transition-colors hover:text-[var(--accent)]"
-            title="Copy room code"
-          >
-            Room: #{room.code}
-            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-          </button>
-          {isHost && (
-            <span className="rounded-md bg-yellow-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-yellow-400">
-              Host
+      <div className="border-b border-[var(--border-primary)] px-4 py-3 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <div className="h-5 w-1 shrink-0 rounded-full bg-[var(--accent)]" />
+            <h2 className="type-h3 truncate text-[var(--text-primary)]">Watch Party</h2>
+            <span className="shrink-0 rounded-full bg-[var(--accent-muted)] px-2.5 py-0.5 text-xs font-semibold text-[var(--accent)]">
+              {totalInCall}/{MAX_SLOTS}
             </span>
-          )}
-          <button
-            onClick={leaveRoom}
-            className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-400 transition-all hover:bg-red-500/20 active:scale-[0.98]"
-          >
-            Leave
-          </button>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {isHost && (
+              <span className="rounded-md bg-yellow-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-yellow-400">
+                Host
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={leaveRoom}
+              className="min-h-[36px] rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-400 transition-all hover:bg-red-500/20 active:scale-[0.98]"
+            >
+              Leave
+            </button>
+          </div>
         </div>
+
+        <RoomCodeDisplay code={room.code} onCopy={copyCode} copied={codeCopied} />
       </div>
 
       {/* Call area or Join CTA */}

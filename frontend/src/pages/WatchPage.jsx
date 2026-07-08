@@ -3,30 +3,49 @@
 // toggle, and Watch Party Room (10-user calling grid) below the video.
 // Desktop: video top + watch party below. Chat panel on the right side.
 // ---------------------------------------------------------------------------
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import Hls from 'hls.js';
-import { apiGet, apiPost, BACKEND_URL } from '../lib/config.js';
+import { apiGet, apiPost } from '../lib/config.js';
+import { isToffeeStream, isMobileDevice } from '../lib/toffee.js';
+import { resolvePlaybackUrl, needsServerProxy } from '../lib/playback.js';
 import { getStoredUsername } from '../lib/utils.js';
-import ChannelCard from '../components/ChannelCard.jsx';
-import Chat from '../components/Chat.jsx';
-import WatchPartyRoom from '../components/WatchPartyRoom.jsx';
+import LiveBadge from '../components/LiveBadge.jsx';
+import StreamOfflineFallback from '../components/StreamOfflineFallback.jsx';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
+
+const Chat = lazy(() => import('../components/Chat.jsx'));
+const WatchPartyRoom = lazy(() => import('../components/WatchPartyRoom.jsx'));
+
+function PanelLoader() {
+  return (
+    <div className="flex h-24 items-center justify-center">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--accent)]/30 border-t-[var(--accent)]" />
+    </div>
+  );
+}
 
 export default function WatchPage() {
   const [searchParams] = useSearchParams();
   const url = searchParams.get('url') || '';
   const name = searchParams.get('name') || 'Live Stream';
   const logo = searchParams.get('logo') || '';
+  const source = searchParams.get('source') || '';
+  const isToffee = isToffeeStream(url, source);
+  const isServerProxied = needsServerProxy(url, source);
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const containerRef = useRef(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [streamHeaders, setStreamHeaders] = useState(null);
+  const [headersReady, setHeadersReady] = useState(false);
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [playbackReady, setPlaybackReady] = useState(false);
   const [relatedChannels, setRelatedChannels] = useState([]);
+  const [fallbackAlternatives, setFallbackAlternatives] = useState([]);
+  const [alternativesLoading, setAlternativesLoading] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fitToScreen, setFitToScreen] = useState(false);
   const username = getStoredUsername() || 'Guest';
@@ -59,25 +78,32 @@ export default function WatchPage() {
     return () => clearTimeout(hideTimer.current);
   }, [resetHideTimer]);
 
-    // Fetch stream headers if it's a Toffee stream
+  // Resolve playback URL — server-proxied FIFA/gateway streams need no client setup.
   useEffect(() => {
-    if (!url) return;
-    setStreamHeaders(null);
-    apiGet('/api/channels')
-      .then((res) => {
-        const channel = res.channels?.find((ch) => ch.url === url);
-        if (channel?.headers) {
-          setStreamHeaders(channel.headers);
-        }
-      })
-      .catch(() => {});
-  }, [url]);
+    if (!url || isToffee) return;
 
-  // Load HLS stream
+    if (isServerProxied) {
+      const proxied = resolvePlaybackUrl(url, source);
+      setSourceUrl(proxied || url);
+      setPlaybackReady(true);
+      setLoading(true);
+    } else {
+      setSourceUrl(url);
+      setPlaybackReady(true);
+      setLoading(true);
+    }
+    setHeadersReady(true);
+  }, [url, isToffee, isServerProxied, source]);
+
+  // Load HLS stream (hls.js loaded on demand)
   useEffect(() => {
-    if (!url) return;
+    if (!url || isToffee || !headersReady || !playbackReady || !sourceUrl) return;
     const video = videoRef.current;
     if (!video) return;
+
+    let cancelled = false;
+    let loadTimeout;
+
     setError(null);
     setLoading(true);
     setAvailableLevels([]);
@@ -85,72 +111,163 @@ export default function WatchPage() {
 
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
-    if (Hls.isSupported()) {
-      const hlsConfig = {
-        lowLatencyMode: true,
-        enableWorker: true,
-        maxBufferSize: 30 * 1024 * 1024,
-        maxBufferLength: 30,
-      };
-
-      let sourceUrl = url;
-      if (streamHeaders) {
-        // Use the backend proxy for Toffee streams
-        sourceUrl = `${BACKEND_URL}/api/toffee-proxy/manifest?url=${encodeURIComponent(url)}`;
-      }
-
-      const hls = new Hls(hlsConfig);
-      hlsRef.current = hls;
-      hls.loadSource(sourceUrl);
-      hls.attachMedia(video);
-
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    loadTimeout = setTimeout(() => {
+      if (!cancelled) {
+        setError('Stream timed out — the source may be offline.');
         setLoading(false);
-        const levels = hls.levels.map((level, idx) => ({
-          index: idx,
-          height: level.height,
-          width: level.width,
-          bitrate: level.bitrate,
-          label: level.height ? `${level.height}p` : `${Math.round(level.bitrate / 1000)}k`,
-        }));
-        setAvailableLevels(levels);
-        video.play().catch(() => {});
-      });
+      }
+    }, isMobileDevice() ? 30000 : 20000);
 
-      hls.on(Hls.Events.LEVEL_SWITCHED, (_e, data) => { setCurrentLevel(data.level); });
+    async function startPlayback() {
+      try {
+        const { default: Hls } = await import('hls.js');
+        if (cancelled) return;
 
-      hls.on(Hls.Events.ERROR, (_e, data) => {
-        if (data.fatal) {
-          setError('Stream unavailable — the source may be offline or geo-restricted.');
+        if (Hls.isSupported()) {
+          const hlsConfig = isServerProxied
+            ? {
+                  lowLatencyMode: false,
+                  enableWorker: false,
+                  maxBufferSize: 60 * 1024 * 1024,
+                  maxBufferLength: 60,
+                  fragLoadingMaxRetry: 6,
+                  manifestLoadingMaxRetry: 4,
+                  levelLoadingMaxRetry: 4,
+                }
+            : {
+                lowLatencyMode: true,
+                enableWorker: true,
+                maxBufferSize: 30 * 1024 * 1024,
+                maxBufferLength: 30,
+              };
+
+          const hls = new Hls(hlsConfig);
+          hlsRef.current = hls;
+          hls.loadSource(sourceUrl);
+          hls.attachMedia(video);
+
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            if (cancelled) return;
+            const levels = hls.levels.map((level, idx) => ({
+              index: idx,
+              height: level.height,
+              width: level.width,
+              bitrate: level.bitrate,
+              label: level.height ? `${level.height}p` : `${Math.round(level.bitrate / 1000)}k`,
+            }));
+            setAvailableLevels(levels);
+            video.play().catch(() => {});
+          });
+
+          hls.on(Hls.Events.FRAG_LOADED, () => {
+            if (cancelled) return;
+            clearTimeout(loadTimeout);
+            setLoading(false);
+          });
+
+          hls.on(Hls.Events.LEVEL_SWITCHED, (_e, data) => { setCurrentLevel(data.level); });
+
+          hls.on(Hls.Events.ERROR, (_e, data) => {
+            if (!data.fatal || cancelled) return;
+            clearTimeout(loadTimeout);
+            console.error('[watch] HLS fatal error:', data.type, data.details, data.response?.code);
+            setError(isServerProxied
+              ? 'This stream is temporarily offline.'
+              : 'Stream unavailable — the source may be offline or geo-restricted.');
+            setLoading(false);
+            apiPost('/api/channels/report-dead', { url }).catch(() => {});
+          });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = sourceUrl;
+          video.addEventListener('loadeddata', () => {
+            if (cancelled) return;
+            clearTimeout(loadTimeout);
+            setLoading(false);
+            video.play().catch(() => {});
+          }, { once: true });
+          video.addEventListener('error', () => {
+            if (cancelled) return;
+            clearTimeout(loadTimeout);
+            setError('Playback failed. Try another channel.');
+            setLoading(false);
+          }, { once: true });
+        } else {
+          setError('HLS playback is not supported in this browser.');
           setLoading(false);
-          apiPost('/api/channels/report-dead', { url }).catch(() => {});
         }
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = url;
-      video.addEventListener('loadeddata', () => { setLoading(false); video.play().catch(() => {}); }, { once: true });
-    } else {
-      setError('HLS playback is not supported in this browser.');
-      setLoading(false);
+      } catch (err) {
+        if (cancelled) return;
+        clearTimeout(loadTimeout);
+        console.error('[watch] HLS init failed:', err);
+        setError('Failed to start player. Please try again.');
+        setLoading(false);
+      }
     }
 
+    startPlayback();
+
     return () => {
+      cancelled = true;
+      clearTimeout(loadTimeout);
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
     };
-  }, [url, streamHeaders]);
+  }, [url, sourceUrl, playbackReady, headersReady, isToffee, isServerProxied, retryKey]);
+
+  // Load alternative channels when stream fails
+  useEffect(() => {
+    if (!error) {
+      setFallbackAlternatives([]);
+      return;
+    }
+    let alive = true;
+    setAlternativesLoading(true);
+
+    Promise.all([
+      apiGet('/api/fifa/channels').catch(() => ({ channels: [] })),
+      apiGet('/api/channels/sports').catch(() => ({ channels: [] })),
+    ])
+      .then(([fifaData, sportsData]) => {
+        if (!alive) return;
+        const pool = [
+          ...(fifaData.channels || []).map((ch) => ({ ...ch, source: 'fifa' })),
+          ...(sportsData.channels || []),
+        ];
+        const seen = new Set([url]);
+        const picks = [];
+        for (const ch of pool) {
+          if (!ch?.url || seen.has(ch.url)) continue;
+          seen.add(ch.url);
+          picks.push(ch);
+          if (picks.length >= 3) break;
+        }
+        setFallbackAlternatives(picks);
+      })
+      .finally(() => {
+        if (alive) setAlternativesLoading(false);
+      });
+
+    return () => { alive = false; };
+  }, [error, url]);
+
+  function retryStream() {
+    setError(null);
+    setLoading(true);
+    setRetryKey((k) => k + 1);
+  }
 
   // Load related channels
   useEffect(() => {
-    apiGet('/api/channels/sports')
+    const endpoint = source === 'fifa' ? '/api/fifa/channels' : '/api/channels/sports';
+    apiGet(endpoint)
       .then((data) => {
         const related = (data.channels || []).filter((ch) => ch.url !== url).sort(() => Math.random() - 0.5).slice(0, 6);
         setRelatedChannels(related);
       })
       .catch(() => {});
-  }, [url]);
+  }, [url, source]);
 
   // Track play state
   useEffect(() => {
@@ -176,10 +293,6 @@ export default function WatchPage() {
     if (video.paused) video.play().catch(() => {});
     else video.pause();
   };
-
-  const isMobileDevice = () =>
-    typeof window !== 'undefined' &&
-    (window.matchMedia?.('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
 
   const lockLandscape = useCallback(async () => {
     if (!isMobileDevice()) return;
@@ -258,10 +371,32 @@ export default function WatchPage() {
     );
   }
 
+  if (isToffee) {
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-16 text-center">
+        <div className="flex flex-col items-center gap-4 max-w-md mx-auto">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-500/10 ring-1 ring-orange-500/20">
+            <span className="text-2xl">📺</span>
+          </div>
+          <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">Toffee Unavailable</h2>
+          <p className="text-sm text-[var(--text-muted)]">
+            Toffee live streams have been removed. Watch FIFA World Cup matches on the World Cup tab instead.
+          </p>
+          <Link to="/?tab=worldcup" className="mt-2 inline-flex min-h-[44px] items-center rounded-lg bg-yellow-500 px-4 py-2 text-sm font-bold text-black active:scale-95 transition-transform">
+            Watch FIFA Live
+          </Link>
+          <Link to="/" className="text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--accent)]">
+            Back to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const currentQualityLabel = currentLevel === -1 ? 'Auto' : availableLevels[currentLevel]?.label || 'Auto';
 
   return (
-    <div className="mx-auto max-w-[1600px] px-3 py-3 md:px-4 md:py-4">
+    <div className="page-container max-w-[1600px] py-3 md:py-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
 
         {/* ── Left Column: Video + Info + Watch Party + Related ── */}
@@ -271,7 +406,7 @@ export default function WatchPage() {
           <div
             ref={containerRef}
             data-player-container
-            className={`player-container relative w-full overflow-hidden rounded-xl bg-black shadow-lg ring-1 ring-[var(--border-primary)] ${isFullscreen ? 'is-fullscreen' : 'aspect-video'}`}
+            className={`player-container relative w-full overflow-hidden rounded-xl bg-black shadow-lg ring-1 ring-[var(--border-primary)] ${isFullscreen ? 'is-fullscreen' : ''}`}
             onMouseMove={resetHideTimer}
             onTouchStart={resetHideTimer}
           >
@@ -303,18 +438,14 @@ export default function WatchPage() {
 
             {/* Error overlay */}
             {error && !loading && (
-              <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/90 p-4 text-center">
-                <div className="flex flex-col items-center gap-3 max-w-xs">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 ring-1 ring-red-500/20">
-                    <svg className="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                    </svg>
-                  </div>
-                  <p className="text-xs font-medium text-red-300">{error}</p>
-                  <Link to="/" className="rounded-lg bg-[var(--bg-tertiary)] px-3 py-1.5 text-xs font-bold text-white hover:bg-[var(--bg-secondary)]">
-                    Try Another Channel
-                  </Link>
-                </div>
+              <div className="absolute inset-0 z-20 flex items-center justify-center overflow-y-auto bg-black/92 p-4">
+                <StreamOfflineFallback
+                  channelName={name}
+                  alternatives={fallbackAlternatives}
+                  loading={alternativesLoading}
+                  onRetry={retryStream}
+                  compact
+                />
               </div>
             )}
 
@@ -332,9 +463,10 @@ export default function WatchPage() {
                   <div className="relative flex items-center gap-2 px-3 py-2.5 md:px-4 md:py-3">
                     {/* Play/Pause */}
                     <button
+                      type="button"
                       onClick={togglePlay}
-                      className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 transition-all active:scale-90"
-                      title={isPlaying ? 'Pause' : 'Play'}
+                      className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 transition-all active:scale-90"
+                      aria-label={isPlaying ? 'Pause' : 'Play'}
                     >
                       {isPlaying ? (
                         <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
@@ -478,13 +610,11 @@ export default function WatchPage() {
                   <span className="rounded-md bg-[var(--accent)] px-2.5 py-0.5 text-[10px] font-bold text-white">
                     Sports
                   </span>
-                  <span className="flex items-center gap-1 text-[10px] font-medium text-red-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulseLive" />
-                    LIVE
-                  </span>
+                  <LiveBadge />
                   {availableLevels.length > 0 && (
                     <span className="text-[10px] text-[var(--text-muted)]">{currentQualityLabel}</span>
                   )}
+
                 </div>
               </div>
             </div>
@@ -513,7 +643,9 @@ export default function WatchPage() {
           </div>
 
           {/* ── Watch Party Room (10-user grid BELOW the stream) ── */}
-          <WatchPartyRoom />
+          <Suspense fallback={<PanelLoader />}>
+            <WatchPartyRoom partyCode={searchParams.get('party') || searchParams.get('room') || ''} />
+          </Suspense>
 
           {/* Chat section (mobile only) */}
           {!isDesktop && showChat && (
@@ -526,7 +658,9 @@ export default function WatchPage() {
                   <span className="text-xs font-bold text-[var(--text-primary)]">Live Chat</span>
                 </div>
                 <div className="h-[calc(100%-40px)]">
-                  <Chat />
+                  <Suspense fallback={<PanelLoader />}>
+                    <Chat />
+                  </Suspense>
                 </div>
               </div>
             </div>
@@ -537,10 +671,10 @@ export default function WatchPage() {
             <section className="space-y-2">
               <h3 className="font-display text-sm font-bold text-[var(--text-primary)]">More Sports Channels</h3>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {relatedChannels.map((ch, i) => (
+                {relatedChannels.map((ch) => (
                   <Link
-                    key={i}
-                    to={`/watch?url=${encodeURIComponent(ch.url)}&name=${encodeURIComponent(ch.name)}&logo=${encodeURIComponent(ch.logo || '')}`}
+                    key={ch.url || ch.name}
+                    to={`/watch?url=${encodeURIComponent(ch.url)}&name=${encodeURIComponent(ch.name)}&logo=${encodeURIComponent(ch.logo || '')}&source=${encodeURIComponent(source || '')}`}
                     className="flex items-center gap-2 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-2 transition-all hover:border-[var(--accent)]/30 hover:bg-[var(--bg-tertiary)] active:scale-[0.98]"
                   >
                     <div className="flex h-8 w-10 shrink-0 items-center justify-center overflow-hidden rounded bg-[var(--bg-tertiary)]">
@@ -554,10 +688,7 @@ export default function WatchPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-[10px] font-bold text-[var(--text-primary)]">{ch.name}</p>
-                      <span className="flex items-center gap-1 text-[8px] text-red-400">
-                        <span className="h-1 w-1 rounded-full bg-red-500 animate-pulseLive" />
-                        LIVE
-                      </span>
+                      <LiveBadge className="scale-90 origin-left" />
                     </div>
                   </Link>
                 ))}
@@ -578,7 +709,9 @@ export default function WatchPage() {
                   <span className="text-xs font-bold text-[var(--text-primary)]">Live Chat</span>
                 </div>
                 <div className="flex-1 overflow-hidden">
-                  <Chat />
+                  <Suspense fallback={<PanelLoader />}>
+                    <Chat />
+                  </Suspense>
                 </div>
               </div>
             </div>

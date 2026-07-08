@@ -62,6 +62,14 @@ import {
 } from '../utils/identity.js';
 
 const MAX_MESSAGE_LEN = 500;
+const ROOM_CODE_LEN = 6;
+
+function sanitizeRoomCode(raw) {
+  return String(raw || '')
+    .replace(/[^A-Za-z0-9]/g, '')
+    .toUpperCase()
+    .slice(0, ROOM_CODE_LEN);
+}
 
 function callRoomName(code) {
   return `proom-call:${code}`;
@@ -92,7 +100,11 @@ export function registerPrivateRoomHandlers(io, socket) {
   socket.on('proom:join', (payload = {}) => {
     if (socket.data.proom.code) handleLeave(io, socket);
 
-    const code = String(payload.code || '').toUpperCase();
+    const code = sanitizeRoomCode(payload.code);
+    if (code.length !== ROOM_CODE_LEN) {
+      socket.emit('proom:error', { error: 'Enter a valid 6-character room code' });
+      return;
+    }
     const username = sanitizeUsername(payload.username) || generateUsername();
     const color = generateColor();
 

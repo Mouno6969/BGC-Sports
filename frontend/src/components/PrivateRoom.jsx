@@ -20,6 +20,7 @@ import {
   copyToClipboard,
 } from '../lib/utils.js';
 import { showToast } from './Toast.jsx';
+import RoomCodeDisplay from './RoomCodeDisplay.jsx';
 
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -111,6 +112,7 @@ export default function PrivateRoom() {
   const [locked, setLocked] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [busy, setBusy] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   // ---- chat ----
   const [messages, setMessages] = useState([]);
@@ -600,6 +602,10 @@ export default function PrivateRoom() {
   async function copyCode() {
     if (!room) return;
     const ok = await copyToClipboard(room.code);
+    if (ok) {
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    }
     showToast(ok ? 'Room code copied!' : 'Copy failed', ok ? 'success' : 'error');
   }
 
@@ -651,15 +657,23 @@ export default function PrivateRoom() {
             <div className="h-px flex-1 bg-[var(--border-primary)]" />
           </div>
 
-          <form onSubmit={handleJoin} className="space-y-2">
+          <form onSubmit={handleJoin} className="space-y-3">
+            <label className="type-label block text-center text-[var(--text-muted)]">Enter room code</label>
             <input
               value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              placeholder="Enter room code"
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 6))}
+              placeholder="ABC123"
               maxLength={6}
-              className="input-field text-center uppercase tracking-[0.3em] font-bold"
+              inputMode="text"
+              autoComplete="off"
+              spellCheck={false}
+              className="room-code-input w-full rounded-xl border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-4 py-3.5 text-[var(--text-primary)] outline-none placeholder:tracking-normal placeholder:font-normal placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
             />
-            <button type="submit" disabled={busy} className="btn-ghost w-full disabled:opacity-60">
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-2.5 text-sm font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--accent)]/30 hover:text-[var(--accent)] disabled:opacity-60"
+            >
               {busy ? 'Joining…' : 'Join Room'}
             </button>
           </form>
@@ -675,38 +689,33 @@ export default function PrivateRoom() {
   return (
     <div className="flex h-full flex-col">
       {/* Header: room code + host badge + leave */}
-      <div className="flex items-center justify-between gap-2 border-b border-[var(--border-primary)] px-3 py-2.5">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="space-y-3 border-b border-[var(--border-primary)] px-3 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {isHost && (
+              <span className="rounded-md bg-yellow-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-yellow-400 ring-1 ring-yellow-500/25">
+                Host
+              </span>
+            )}
+            {locked && (
+              <span className="flex items-center gap-0.5 rounded-md bg-red-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-400 ring-1 ring-red-500/25">
+                <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                Locked
+              </span>
+            )}
+          </div>
           <button
-            onClick={copyCode}
-            title="Copy room code"
-            className="flex items-center gap-1.5 rounded-lg bg-accent/10 px-2.5 py-1 text-xs font-bold tracking-[0.2em] text-accent ring-1 ring-accent/20 transition-colors hover:bg-accent/20"
+            type="button"
+            onClick={leaveRoom}
+            className="min-h-[36px] shrink-0 rounded-lg border border-[var(--border-primary)] px-2.5 py-1 text-[10px] font-bold text-[var(--text-secondary)] transition-colors hover:bg-red-500/10 hover:text-red-400 active:scale-95"
           >
-            {room.code}
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
+            Leave
           </button>
-          {isHost && (
-            <span className="rounded-md bg-yellow-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-yellow-400 ring-1 ring-yellow-500/25">
-              Host
-            </span>
-          )}
-          {locked && (
-            <span className="flex items-center gap-0.5 rounded-md bg-red-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-400 ring-1 ring-red-500/25">
-              <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-              Locked
-            </span>
-          )}
         </div>
-        <button
-          onClick={leaveRoom}
-          className="rounded-lg border border-[var(--border-primary)] px-2.5 py-1 text-[10px] font-bold text-[var(--text-secondary)] transition-colors hover:bg-red-500/10 hover:text-red-400 active:scale-95"
-        >
-          Leave
-        </button>
+
+        <RoomCodeDisplay code={room.code} onCopy={copyCode} copied={codeCopied} />
       </div>
 
       {/* Scrollable body */}

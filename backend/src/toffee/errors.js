@@ -1,0 +1,27 @@
+export const ToffeeErrorCode = {
+  NETWORK_FAILURE: 'NETWORK_FAILURE',
+  DNS_FAILURE: 'DNS_FAILURE',
+  TLS_FAILURE: 'TLS_FAILURE',
+  PROXY_FAILURE: 'PROXY_FAILURE',
+  AUTH_FAILURE: 'AUTH_FAILURE',
+  RATE_LIMIT: 'RATE_LIMIT',
+  PERMISSION_DENIED: 'PERMISSION_DENIED',
+  INVALID_HEADERS: 'INVALID_HEADERS',
+  INVALID_COOKIES: 'INVALID_COOKIES',
+  SERVER_ERROR: 'SERVER_ERROR',
+  HTML_RESPONSE: 'HTML_RESPONSE',
+  CAPTCHA_RESPONSE: 'CAPTCHA_RESPONSE',
+  EMPTY_RESPONSE: 'EMPTY_RESPONSE',
+  MALFORMED_MANIFEST: 'MALFORMED_MANIFEST',
+  MALFORMED_JSON: 'MALFORMED_JSON',
+  UNKNOWN: 'UNKNOWN',
+};
+
+export class ToffeeRequestError extends Error {
+  constructor(code, message, meta = {}) {
+    super(message);
+    this.name = 'ToffeeRequestError';
+    this.code = code;
+    this.meta = meta;
+  }
+}

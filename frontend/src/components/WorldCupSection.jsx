@@ -6,6 +6,8 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { apiGet, logoUrl } from '../lib/config.js';
+import FifaLiveSection from './FifaLiveSection.jsx';
+import LiveBadge from './LiveBadge.jsx';
 
 function formatKickoff(match) {
   if (!match.timestamp) return 'Scheduled';
@@ -75,10 +77,7 @@ function WorldCupMatchCard({ match }) {
           )}
         </div>
         {isLive && (
-          <span className="flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-red-400 ring-1 ring-red-500/30">
-            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulseLive" />
-            {match.progress ? `${match.progress}'` : 'LIVE'}
-          </span>
+          <LiveBadge label={match.progress ? `${match.progress}'` : 'LIVE'} />
         )}
         {isUpcoming && (
           <span className="rounded-full bg-yellow-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-yellow-400 ring-1 ring-yellow-500/20 whitespace-nowrap">
@@ -208,14 +207,9 @@ export default function WorldCupSection() {
             <span className="text-lg">🏆</span>
           </div>
           <div>
-            <h2 className="font-display text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <h2 className="type-h2 text-[var(--text-primary)] flex items-center gap-2 flex-wrap">
               FIFA World Cup 2026
-              {liveCount > 0 && (
-                <span className="flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-extrabold text-red-400 ring-1 ring-red-500/20">
-                  <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulseLive" />
-                  {liveCount} LIVE
-                </span>
-              )}
+              {liveCount > 0 && <LiveBadge label={`${liveCount} LIVE`} />}
             </h2>
             <p className="text-[10px] text-[var(--text-muted)]">
               {upcomingCount > 0
@@ -225,7 +219,6 @@ export default function WorldCupSection() {
           </div>
         </div>
 
-        {/* Filter Pills */}
         <div className="flex gap-2">
           {[
             { id: 'all', label: 'All' },
@@ -235,6 +228,7 @@ export default function WorldCupSection() {
           ].map((f) => (
             <button
               key={f.id}
+              type="button"
               onClick={() => setActiveFilter(f.id)}
               className={`rounded-full px-3 py-1 text-[10px] font-bold transition-all ${
                 activeFilter === f.id
@@ -247,6 +241,8 @@ export default function WorldCupSection() {
           ))}
         </div>
       </div>
+
+      <FifaLiveSection />
 
       {/* Match Grid */}
       {loading ? (

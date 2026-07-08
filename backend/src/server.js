@@ -7,9 +7,15 @@
 
 import 'dotenv/config';
 import http from 'http';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
 import { Server as SocketIOServer } from 'socket.io';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const serveFrontend = process.env.SERVE_FRONTEND === '1';
+const frontendDist = path.resolve(__dirname, '../../frontend/dist');
 
 import { config, isLiveKitConfigured } from './config/index.js';
 import apiRoutes from './routes/api.js';
@@ -17,6 +23,8 @@ import adminRoutes from './routes/admin.js';
 import channelsRoutes from './routes/channels.js';
 import logoProxyRoute from './routes/logoProxy.js';
 import toffeeProxyRoute from './routes/toffeeProxy.js';
+import toffeeCdnRoute from './routes/toffeeCdn.js';
+import hlsProxyRoute from './routes/hlsProxy.js';
 import scoresRoute from './routes/scores.js';
 import { registerChatHandlers } from './sockets/chat.js';
 import { registerRoomHandlers } from './sockets/room.js';
@@ -44,15 +52,29 @@ app.use((req, _res, next) => {
 });
 
 // ------------------------------- Routes ------------------------------------
-app.get('/', (_req, res) => {
-  res.json({ name: 'BGC Sports API', status: 'ok' });
-});
+if (!serveFrontend) {
+  app.get('/', (_req, res) => {
+    res.json({ name: 'BGC Sports API', status: 'ok' });
+  });
+}
 app.use('/api', apiRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/channels', channelsRoutes);
 app.use('/api/logo-proxy', logoProxyRoute);
 app.use('/api/toffee-proxy', toffeeProxyRoute);
+app.use('/api/toffee-cdn', toffeeCdnRoute);
+app.use('/api/hls-proxy', hlsProxyRoute);
 app.use('/api/scores', scoresRoute);
+
+if (serveFrontend) {
+  app.use(express.static(frontendDist));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+}
 
 // ------------------------------ Socket.IO ----------------------------------
 const io = new SocketIOServer(server, {
@@ -96,5 +118,8 @@ server.listen(config.port, () => {
   );
   console.log(' Private Rooms: ENABLED (group chat + video/audio call)');
   console.log(' Host Controls: kick, force-mute, lock, end-call, transfer-host');
+  if (serveFrontend) {
+    console.log(` Frontend: serving ${frontendDist}`);
+  }
   console.log('-----------------------------------------------------------');
 });

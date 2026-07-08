@@ -44,6 +44,13 @@ export const config = {
     process.env.MAX_PARTICIPANTS_PER_ROOM || '10',
     10
   ),
+
+  toffee: {
+    proxyUrls: (process.env.TOFFEE_PROXY_URLS || process.env.TOFFEE_PROXY_URL || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean),
+  },
 };
 
 /**

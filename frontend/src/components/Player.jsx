@@ -4,7 +4,8 @@
 // ---------------------------------------------------------------------------
 import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { BACKEND_URL } from '../lib/config.js';
+import { buildToffeeSourceUrl, createToffeeHlsConfig } from '../lib/toffee.js';
+import { ensureToffeeServiceWorker } from '../lib/toffeeSw.js';
 
 const DRIFT_THRESHOLD = 2; // seconds
 
@@ -55,30 +56,37 @@ export default function Player({
       hlsRef.current = null;
     }
 
-    if (Hls.isSupported()) {
-      // Pass custom headers if provided (needed for Toffee streams)
-      const hlsConfig = { 
-        lowLatencyMode: true, 
-        enableWorker: true,
-      };
-      
-      let sourceUrl = url;
-      if (stream.headers) {
-        // Use the backend proxy for Toffee streams
-        sourceUrl = `${BACKEND_URL}/api/toffee-proxy/manifest?url=${encodeURIComponent(url)}`;
-      }
+    let cancelled = false;
 
-      const hls = new Hls(hlsConfig);
-      hlsRef.current = hls;
-      hls.loadSource(sourceUrl);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => setLoading(false));
-      hls.on(Hls.Events.ERROR, (_e, data) => {
-        if (data.fatal) {
-          setError('Stream error — the source may be offline.');
-          setLoading(false);
+    if (Hls.isSupported()) {
+      const startPlayback = async () => {
+        if (stream.headers) {
+          await ensureToffeeServiceWorker(stream.headers);
         }
-      });
+        if (cancelled) return;
+
+        const hlsConfig = stream.headers
+          ? createToffeeHlsConfig(stream.headers)
+          : { lowLatencyMode: true, enableWorker: true };
+
+        const sourceUrl = stream.headers
+          ? buildToffeeSourceUrl(url)
+          : url;
+
+        const hls = new Hls(hlsConfig);
+        hlsRef.current = hls;
+        hls.loadSource(sourceUrl);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => setLoading(false));
+        hls.on(Hls.Events.ERROR, (_e, data) => {
+          if (data.fatal) {
+            setError('Stream error — the source may be offline.');
+            setLoading(false);
+          }
+        });
+      };
+
+      startPlayback();
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = url;
       video.addEventListener('loadeddata', () => setLoading(false), { once: true });
@@ -88,12 +96,13 @@ export default function Player({
     }
 
     return () => {
+      cancelled = true;
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
     };
-  }, [type, url]);
+  }, [type, url, stream?.headers]);
 
   // ----- Host: broadcast local playback changes -----------------------------
   useEffect(() => {

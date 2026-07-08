@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { apiGet, logoUrl } from '../lib/config.js';
+import LiveBadge from './LiveBadge.jsx';
 
 function formatKickoff(match) {
   if (!match.timestamp) return 'Scheduled';
@@ -51,12 +52,12 @@ function MatchCard({ match, onMatchClick }) {
       viewport={{ once: true }}
       transition={{ duration: 0.4 }}
       onClick={() => onMatchClick(match)}
-      className={`cursor-pointer rounded-xl border p-4 transition-all duration-300 hover:scale-[1.02] ${
+      className={`card-sports cursor-pointer p-4 transition-all duration-300 hover:scale-[1.02] ${
         isLive
           ? 'border-red-500/30 bg-red-500/5 hover:border-red-500/50'
           : isUpcoming
           ? 'border-[var(--accent)]/20 bg-[var(--accent)]/5 hover:border-[var(--accent)]/40'
-          : 'border-[var(--border-primary)] bg-[var(--bg-card)] hover:border-[var(--border-secondary)]'
+          : ''
       }`}
     >
       {/* League header */}
@@ -65,10 +66,7 @@ function MatchCard({ match, onMatchClick }) {
           {match.league}
         </span>
         {isLive && (
-          <span className="flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-red-400 ring-1 ring-red-500/30">
-            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulseLive" />
-            {match.progress ? `${match.progress}'` : 'LIVE'}
-          </span>
+          <LiveBadge label={match.progress ? `${match.progress}'` : 'LIVE'} />
         )}
         {isUpcoming && (
           <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent ring-1 ring-accent/20 whitespace-nowrap">
@@ -204,8 +202,9 @@ export default function LiveScoresSection({ onMatchClick }) {
             <span className="text-sm">⚽</span>
           </div>
           <div>
-            <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">
-              Football Scores {liveCount > 0 && <span className="text-red-400">({liveCount} live)</span>}
+            <h2 className="type-h2 text-[var(--text-primary)] flex items-center gap-2 flex-wrap">
+              Football Scores
+              {liveCount > 0 && <LiveBadge label={`${liveCount} LIVE`} />}
             </h2>
             <p className="text-[10px] text-[var(--text-muted)]">
               {lastUpdated
@@ -215,7 +214,6 @@ export default function LiveScoresSection({ onMatchClick }) {
           </div>
         </div>
 
-        {/* Filter Pills */}
         <div className="flex gap-2">
           {[
             { id: 'all', label: 'All' },
@@ -225,6 +223,7 @@ export default function LiveScoresSection({ onMatchClick }) {
           ].map((f) => (
             <button
               key={f.id}
+              type="button"
               onClick={() => setActiveFilter(f.id)}
               className={`rounded-full px-3 py-1 text-[10px] font-bold transition-all ${
                 activeFilter === f.id

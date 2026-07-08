@@ -16,14 +16,12 @@ export default {
           400: '#2E4066',
           300: '#3D5580',
         },
-        // Primary accent — emerald green
         accent: {
           DEFAULT: '#10B981',
           light: '#34D399',
           dark: '#059669',
           muted: '#10B98133',
         },
-        // Status colors
         live: '#EF4444',
         success: '#10B981',
         warning: '#F59E0B',

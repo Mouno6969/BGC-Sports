@@ -12,7 +12,9 @@ import { config, isLiveKitConfigured } from '../config/index.js';
 import { getStream } from '../utils/streamStore.js';
 import { roomStore } from '../utils/roomStore.js';
 import { sanitizeUsername } from '../utils/identity.js';
-import { fetchToffeeChannels, getToffeeChannels } from '../utils/toffeeService.js';
+import { fetchToffeeChannels, refreshToffeeChannels } from '../utils/toffeeService.js';
+import { fetchLiveFifaChannels, getFifaChannelsByProvider } from '../utils/fifaService.js';
+import { createToffeeSession, getToffeeSession } from '../toffee/sessionStore.js';
 
 const router = Router();
 
@@ -32,10 +34,46 @@ router.get('/stream', (req, res) => {
   res.json({ ok: true, stream: getStream() });
 });
 
+router.post('/toffee/session', (req, res) => {
+  try {
+    const headers = req.body?.headers || {};
+    const session = createToffeeSession(headers);
+    res.json({ ok: true, ...session });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'Failed to create Toffee session' });
+  }
+});
+
+router.get('/toffee/session/:sessionId', (req, res) => {
+  const headers = getToffeeSession(req.params.sessionId);
+  if (!headers) {
+    return res.status(404).json({ ok: false, error: 'Session expired or not found' });
+  }
+  res.json({ ok: true, headers });
+});
+
+router.get('/fifa/channels', async (req, res) => {
+  try {
+    const channels = await fetchLiveFifaChannels({ refresh: req.query.refresh === '1' });
+    res.json({
+      ok: true,
+      count: channels.length,
+      channels,
+      groups: getFifaChannelsByProvider(channels),
+      note: 'FIFA streams are proxied server-side — no setup required',
+    });
+  } catch (error) {
+    console.error('[fifa] API error:', error);
+    res.status(500).json({ ok: false, error: 'Failed to load FIFA channels' });
+  }
+});
+
 // Toffee channels - returns channels + the exact headers needed for playback
 router.get('/toffee/channels', async (req, res) => {
   try {
-    const channels = await fetchToffeeChannels();
+    const channels = req.query.refresh === '1'
+      ? await refreshToffeeChannels()
+      : await fetchToffeeChannels();
     res.json({ 
       ok: true, 
       count: channels.length,
