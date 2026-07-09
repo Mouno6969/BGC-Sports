@@ -15,6 +15,10 @@
 //   chat:message  message
 //   chat:reaction { messageId, emoji, username }
 //   chat:count    number (online users)
+//
+// AI Integration:
+//   When a message contains "@bgc", the BGC AI agent processes the query
+//   and responds with World Cup analysis, predictions, or match insights.
 // ---------------------------------------------------------------------------
 
 import { nanoid } from 'nanoid';
@@ -24,6 +28,7 @@ import {
   sanitizeUsername,
   sanitizeAvatar,
 } from '../utils/identity.js';
+import { setupPublicChatAI } from './aiChat.js';
 
 const PUBLIC_CHANNEL = 'public-chat';
 const HISTORY_LIMIT = 100;
@@ -52,7 +57,15 @@ function makeRateLimiter(maxPerWindow = 5, windowMs = 3000) {
   };
 }
 
+// AI handler (initialized once per io instance)
+let aiHandler = null;
+
 export function registerChatHandlers(io, socket) {
+  // Initialize AI handler once
+  if (!aiHandler) {
+    aiHandler = setupPublicChatAI(io, pushHistory);
+  }
+
   socket.data.chat = {
     username: null,
     color: null,
@@ -132,6 +145,14 @@ export function registerChatHandlers(io, socket) {
     };
     pushHistory(msg);
     io.to(PUBLIC_CHANNEL).emit('chat:message', msg);
+
+    // --- AI Integration: Check for @bgc mention and respond ---
+    if (aiHandler) {
+      // Process asynchronously — don't block the chat flow
+      aiHandler(msg).catch((err) => {
+        console.error('[AI-Chat] Unhandled error:', err);
+      });
+    }
   });
 
   socket.on('chat:reaction', (payload = {}) => {

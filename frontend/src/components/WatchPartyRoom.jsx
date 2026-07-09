@@ -16,6 +16,7 @@ import { saveRoomSession, getRoomSession, clearRoomSession } from '../lib/roomSe
 import { slugify } from '../lib/slug.js';
 import { apiGet } from '../lib/config.js';
 import UserAvatar from './UserAvatar.jsx';
+import AiBotBadge from './AiBotBadge.jsx';
 import { showToast } from './Toast.jsx';
 import RoomCodeDisplay from './RoomCodeDisplay.jsx';
 
@@ -1220,7 +1221,12 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
                         <span className="mr-1.5 text-[11px] font-bold" style={{ color: msg.color || 'var(--accent)' }}>
                           {msg.username}
                         </span>
-                        <span className="break-words rounded-xl text-xs leading-relaxed text-[var(--text-secondary)]">{msg.text}</span>
+                        {msg.isAI && <AiBotBadge />}
+                        <span className={`break-words rounded-xl text-xs leading-relaxed ${
+                          msg.isAI
+                            ? 'mt-1 block rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 text-[var(--text-primary)]'
+                            : 'text-[var(--text-secondary)]'
+                        }`}>{msg.text}</span>
                       </div>
                     </div>
                   )}
@@ -1233,7 +1239,7 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
               <input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder="Type a message..."
+                placeholder="Type a message... (@bgc for AI)"
                 maxLength={500}
                 className="flex-1 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-3 py-2 text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30"
               />

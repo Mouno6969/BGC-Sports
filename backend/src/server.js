@@ -26,6 +26,7 @@ import toffeeProxyRoute from './routes/toffeeProxy.js';
 import toffeeCdnRoute from './routes/toffeeCdn.js';
 import hlsProxyRoute from './routes/hlsProxy.js';
 import scoresRoute from './routes/scores.js';
+import aiRoute from './routes/ai.js';
 import { registerChatHandlers } from './sockets/chat.js';
 import { registerRoomHandlers } from './sockets/room.js';
 import { registerCallHandlers } from './sockets/call.js';
@@ -65,6 +66,7 @@ app.use('/api/toffee-proxy', toffeeProxyRoute);
 app.use('/api/toffee-cdn', toffeeCdnRoute);
 app.use('/api/hls-proxy', hlsProxyRoute);
 app.use('/api/scores', scoresRoute);
+app.use('/api/ai', aiRoute);
 
 if (serveFrontend) {
   app.use(express.static(frontendDist));
@@ -118,6 +120,7 @@ server.listen(config.port, () => {
   );
   console.log(' Private Rooms: ENABLED (group chat + video/audio call)');
   console.log(' Host Controls: kick, force-mute, lock, end-call, transfer-host');
+  console.log(' BGC AI Agent: ENABLED (@bgc mention in any chat)');
   if (serveFrontend) {
     console.log(` Frontend: serving ${frontendDist}`);
   }

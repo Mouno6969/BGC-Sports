@@ -65,6 +65,10 @@ import {
   sanitizeUsername,
   sanitizeAvatar,
 } from '../utils/identity.js';
+import { setupPrivateRoomAI } from './aiChat.js';
+
+// AI handler for private room chat (initialized once)
+let aiRoomHandler = null;
 
 const MAX_MESSAGE_LEN = 500;
 const ROOM_CODE_LEN = 6;
@@ -264,6 +268,14 @@ export function registerPrivateRoomHandlers(io, socket) {
     };
     store.pushChat(code, msg);
     io.to(code).emit('proom:chat', msg);
+
+    // --- AI Integration: Check for @bgc mention and respond ---
+    if (!aiRoomHandler) {
+      aiRoomHandler = setupPrivateRoomAI(io, store);
+    }
+    aiRoomHandler(msg, code).catch((err) => {
+      console.error('[AI-Room] Unhandled error:', err);
+    });
   });
 
   // ======================= ROOM-SCOPED A/V CALL ============================

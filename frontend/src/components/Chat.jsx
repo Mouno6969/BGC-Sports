@@ -8,6 +8,7 @@ import { socket } from '../lib/socket.js';
 import { formatTime, formatChatText, getStoredUsername, setStoredUsername } from '../lib/utils.js';
 import { getProfile, getGuestName, getEffectiveName, onProfileChange, saveProfile } from '../lib/profile.js';
 import UserAvatar from './UserAvatar.jsx';
+import AiBotBadge from './AiBotBadge.jsx';
 
 const QUICK_EMOJIS = ['👏', '🔥', '⚽', '🏀', '🎉', '😂', '❤️', '💪'];
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '😮'];
@@ -286,6 +287,7 @@ export default function Chat() {
                   <span className="text-[13px] font-bold" style={{ color: m.color }}>
                     {m.username}
                   </span>
+                  {m.isAI && <AiBotBadge />}
                   <span className="text-[10px] text-[var(--text-muted)] opacity-0 transition-opacity group-hover:opacity-100">{formatTime(m.ts)}</span>
                 </div>
                 {isGif ? (
@@ -297,7 +299,11 @@ export default function Chat() {
                   />
                 ) : (
                   <div
-                    className="mt-0.5 ml-8 break-words text-sm leading-relaxed text-[var(--text-secondary)]"
+                    className={`mt-0.5 ml-8 break-words text-sm leading-relaxed ${
+                      m.isAI
+                        ? 'rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[var(--text-primary)]'
+                        : 'text-[var(--text-secondary)]'
+                    }`}
                     dangerouslySetInnerHTML={{ __html: formatChatText(m.text) }}
                   />
                 )}
@@ -485,7 +491,7 @@ export default function Chat() {
         <input
           value={draft}
           onChange={handleDraftChange}
-          placeholder="Say something…"
+          placeholder="Say something… (type @bgc for AI analysis)"
           maxLength={500}
           className="min-w-0 flex-1 rounded-full border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-2.5 text-sm text-[var(--text-primary)] outline-none transition-all duration-200 placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30"
         />
