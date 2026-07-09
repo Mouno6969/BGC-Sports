@@ -45,7 +45,7 @@ class PrivateRoomStore {
   }
 
   /** Create a new private room owned by `hostId`. */
-  createRoom(hostId, hostUsername, hostColor) {
+  createRoom(hostId, hostUsername, hostColor, hostAvatar = '') {
     const code = this._uniqueCode();
     const room = {
       code,
@@ -55,16 +55,17 @@ class PrivateRoomStore {
       chat: [],
       createdAt: Date.now(),
     };
-    room.members.set(hostId, this._makeMember(hostId, hostUsername, hostColor));
+    room.members.set(hostId, this._makeMember(hostId, hostUsername, hostColor, hostAvatar));
     this.rooms.set(code, room);
     return room;
   }
 
-  _makeMember(id, username, color) {
+  _makeMember(id, username, color, avatar = '') {
     return {
       id,
       username,
       color,
+      avatar,
       inCall: false,
       callMode: null,
       micMuted: false,
@@ -82,7 +83,7 @@ class PrivateRoomStore {
    * Add a member to a room.
    * @returns {{ok: boolean, error?: string, room?: object}}
    */
-  addMember(code, socketId, username, color, maxMembers) {
+  addMember(code, socketId, username, color, maxMembers, avatar = '') {
     const room = this.getRoom(code);
     if (!room) return { ok: false, error: 'Room not found' };
     if (room.locked) return { ok: false, error: 'Room is locked by the host' };
@@ -90,7 +91,7 @@ class PrivateRoomStore {
       return { ok: false, error: 'Room is full' };
     }
     if (room.members.has(socketId)) return { ok: true, room };
-    room.members.set(socketId, this._makeMember(socketId, username, color));
+    room.members.set(socketId, this._makeMember(socketId, username, color, avatar));
     return { ok: true, room };
   }
 

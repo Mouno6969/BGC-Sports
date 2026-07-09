@@ -22,6 +22,7 @@ import {
   generateUsername,
   generateColor,
   sanitizeUsername,
+  sanitizeAvatar,
 } from '../utils/identity.js';
 
 const PUBLIC_CHANNEL = 'public-chat';
@@ -55,6 +56,7 @@ export function registerChatHandlers(io, socket) {
   socket.data.chat = {
     username: null,
     color: null,
+    avatar: '',
     allow: makeRateLimiter(),
   };
 
@@ -62,13 +64,15 @@ export function registerChatHandlers(io, socket) {
     const username =
       sanitizeUsername(payload.username) || generateUsername();
     const color = generateColor();
+    const avatar = sanitizeAvatar(payload.avatar);
 
     socket.data.chat.username = username;
     socket.data.chat.color = color;
+    socket.data.chat.avatar = avatar;
 
     socket.join(PUBLIC_CHANNEL);
 
-    socket.emit('chat:welcome', { username, color });
+    socket.emit('chat:welcome', { username, color, avatar });
     socket.emit('chat:history', history);
 
     // Broadcast updated online count.
@@ -85,8 +89,26 @@ export function registerChatHandlers(io, socket) {
     io.to(PUBLIC_CHANNEL).emit('chat:message', sys);
   });
 
+  // Update identity in place (e.g. after the user edits their profile)
+  // without re-joining or re-announcing.
+  socket.on('chat:update-profile', (payload = {}) => {
+    if (!socket.data.chat.username) return;
+    const username = sanitizeUsername(payload.username);
+    if (username) socket.data.chat.username = username;
+    // Only touch the avatar when the caller explicitly provides the field
+    // (an empty string intentionally clears it); mirrors the username guard.
+    if (payload.avatar !== undefined) {
+      socket.data.chat.avatar = sanitizeAvatar(payload.avatar);
+    }
+    socket.emit('chat:welcome', {
+      username: socket.data.chat.username,
+      color: socket.data.chat.color,
+      avatar: socket.data.chat.avatar,
+    });
+  });
+
   socket.on('chat:message', (payload = {}) => {
-    const { username, color } = socket.data.chat;
+    const { username, color, avatar } = socket.data.chat;
     if (!username) return; // must join first
     if (!socket.data.chat.allow()) {
       socket.emit('chat:error', { error: 'You are sending messages too fast.' });
@@ -103,6 +125,7 @@ export function registerChatHandlers(io, socket) {
       id: nanoid(),
       username,
       color,
+      avatar: avatar || '',
       text,
       ts: Date.now(),
       reactions: {},

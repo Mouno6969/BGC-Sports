@@ -38,3 +38,17 @@ export function sanitizeUsername(raw) {
   if (typeof raw !== 'string') return '';
   return raw.replace(/[<>]/g, '').trim().slice(0, 24);
 }
+
+// Max serialized size for an avatar data URL (~64 KB keeps payloads small).
+const MAX_AVATAR_LEN = 64 * 1024;
+
+/**
+ * Sanitize a user-supplied avatar. Only small base64 image data URLs are
+ * accepted; anything else is dropped to avoid abuse (URLs, scripts, etc.).
+ */
+export function sanitizeAvatar(raw) {
+  if (typeof raw !== 'string') return '';
+  if (raw.length === 0 || raw.length > MAX_AVATAR_LEN) return '';
+  if (!/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(raw)) return '';
+  return raw;
+}

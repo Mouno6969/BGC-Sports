@@ -7,8 +7,8 @@
 // The HOST (room creator) has full control of the room.
 //
 // ---- Events (client -> server) -------------------------------------------
-//   proom:create   { username }                 -> create room, become host
-//   proom:join     { code, username }           -> join an existing room
+//   proom:create   { username, avatar? }        -> create room, become host
+//   proom:join     { code, username, avatar? }  -> join an existing room
 //   proom:leave    {}                           -> leave current room
 //   proom:chat     { text }                     -> send a group chat message
 //
@@ -36,8 +36,8 @@
 //   proom:chat        message
 //   proom:chat-history [messages]
 //
-//   proom:call-participants [{ id, username, mode, micMuted, camOff, forceMuted }]
-//   proom:call-user-joined  { id, username, mode }
+//   proom:call-participants [{ id, username, avatar, mode, micMuted, camOff, forceMuted }]
+//   proom:call-user-joined  { id, username, avatar, mode }
 //   proom:call-user-left    { id }
 //   proom:offer    { from, offer }
 //   proom:answer   { from, answer }
@@ -59,6 +59,7 @@ import {
   generateUsername,
   generateColor,
   sanitizeUsername,
+  sanitizeAvatar,
 } from '../utils/identity.js';
 
 const MAX_MESSAGE_LEN = 500;
@@ -75,6 +76,28 @@ function callRoomName(code) {
   return `proom-call:${code}`;
 }
 
+// Shared shape for a member appearing in the in-call participants list.
+// Used by both the join handler and broadcastCallParticipants so the two
+// payloads never diverge when new fields are added.
+function toCallParticipant(m) {
+  return {
+    id: m.id,
+    username: m.username,
+    avatar: m.avatar || '',
+    mode: m.callMode,
+    micMuted: m.micMuted,
+    camOff: m.camOff,
+    forceMuted: m.forceMuted,
+  };
+}
+
+function callParticipants(code) {
+  return store
+    .memberList(code)
+    .filter((m) => m.inCall)
+    .map(toCallParticipant);
+}
+
 export function registerPrivateRoomHandlers(io, socket) {
   socket.data.proom = { code: null };
 
@@ -85,11 +108,13 @@ export function registerPrivateRoomHandlers(io, socket) {
 
     const username = sanitizeUsername(payload.username) || generateUsername();
     const color = generateColor();
+    const avatar = sanitizeAvatar(payload.avatar);
 
-    const room = store.createRoom(socket.id, username, color);
+    const room = store.createRoom(socket.id, username, color, avatar);
     socket.data.proom.code = room.code;
     socket.data.proom.username = username;
     socket.data.proom.color = color;
+    socket.data.proom.avatar = avatar;
     socket.join(room.code);
 
     socket.emit('proom:created', { room: store.serialize(room.code, socket.id) });
@@ -107,13 +132,15 @@ export function registerPrivateRoomHandlers(io, socket) {
     }
     const username = sanitizeUsername(payload.username) || generateUsername();
     const color = generateColor();
+    const avatar = sanitizeAvatar(payload.avatar);
 
     const result = store.addMember(
       code,
       socket.id,
       username,
       color,
-      config.maxParticipantsPerRoom
+      config.maxParticipantsPerRoom,
+      avatar
     );
     if (!result.ok) {
       socket.emit('proom:error', { error: result.error });
@@ -123,6 +150,7 @@ export function registerPrivateRoomHandlers(io, socket) {
     socket.data.proom.code = result.room.code;
     socket.data.proom.username = username;
     socket.data.proom.color = color;
+    socket.data.proom.avatar = avatar;
     socket.join(result.room.code);
 
     socket.emit('proom:joined', {
@@ -139,17 +167,7 @@ export function registerPrivateRoomHandlers(io, socket) {
 
     // Send the current call participants list to the newly joined user
     // so they know if a call is already in progress and can auto-join.
-    const callList = store
-      .memberList(result.room.code)
-      .filter((m) => m.inCall)
-      .map((m) => ({
-        id: m.id,
-        username: m.username,
-        mode: m.callMode,
-        micMuted: m.micMuted,
-        camOff: m.camOff,
-        forceMuted: m.forceMuted,
-      }));
+    const callList = callParticipants(result.room.code);
     if (callList.length > 0) {
       socket.emit('proom:call-participants', callList);
     }
@@ -177,6 +195,7 @@ export function registerPrivateRoomHandlers(io, socket) {
       id: nanoid(),
       username: member.username,
       color: member.color,
+      avatar: member.avatar || '',
       text,
       ts: Date.now(),
     };
@@ -206,6 +225,7 @@ export function registerPrivateRoomHandlers(io, socket) {
     socket.to(callRoomName(code)).emit('proom:call-user-joined', {
       id: socket.id,
       username: room.members.get(socket.id).username,
+      avatar: room.members.get(socket.id).avatar || '',
       mode,
     });
 
@@ -442,16 +462,5 @@ function broadcastMembers(io, code) {
 function broadcastCallParticipants(io, code) {
   const room = store.getRoom(code);
   if (!room) return;
-  const list = store
-    .memberList(code)
-    .filter((m) => m.inCall)
-    .map((m) => ({
-      id: m.id,
-      username: m.username,
-      mode: m.callMode,
-      micMuted: m.micMuted,
-      camOff: m.camOff,
-      forceMuted: m.forceMuted,
-    }));
-  io.to(callRoomName(code)).emit('proom:call-participants', list);
+  io.to(callRoomName(code)).emit('proom:call-participants', callParticipants(code));
 }

@@ -6,6 +6,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { socket } from '../lib/socket.js';
 import { formatTime, formatChatText, getStoredUsername, setStoredUsername } from '../lib/utils.js';
+import { getProfile, getGuestName, getEffectiveName, onProfileChange, saveProfile } from '../lib/profile.js';
+import UserAvatar from './UserAvatar.jsx';
 
 const QUICK_EMOJIS = ['👏', '🔥', '⚽', '🏀', '🎉', '😂', '❤️', '💪'];
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '😮'];
@@ -29,7 +31,7 @@ const EMOJI_CATEGORIES = {
 
 export default function Chat() {
   const [joined, setJoined] = useState(false);
-  const [nameInput, setNameInput] = useState(getStoredUsername());
+  const [nameInput, setNameInput] = useState(() => getProfile().displayName || getStoredUsername());
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [onlineCount, setOnlineCount] = useState(0);
@@ -47,14 +49,25 @@ export default function Chat() {
   const emojiPickerRef = useRef(null);
   const gifPickerRef = useRef(null);
 
-  // Auto-join if username is stored
+  // Auto-join if a profile name or stored username exists
   useEffect(() => {
-    const stored = getStoredUsername();
+    const stored = getProfile().displayName || getStoredUsername();
     if (stored) {
-      socket.emit('chat:join', { username: stored });
+      socket.emit('chat:join', { username: stored, avatar: getProfile().avatar });
       setJoined(true);
     }
   }, []);
+
+  // Live-update chat identity when the user edits their profile.
+  useEffect(() => {
+    return onProfileChange((profile) => {
+      const name = profile.displayName || getEffectiveName();
+      setNameInput(profile.displayName || '');
+      if (joined) {
+        socket.emit('chat:update-profile', { username: name, avatar: profile.avatar });
+      }
+    });
+  }, [joined]);
 
   // Socket listeners
   useEffect(() => {
@@ -133,9 +146,14 @@ export default function Chat() {
 
   function handleJoin(e) {
     e.preventDefault();
-    const username = nameInput.trim() || 'Guest';
-    setStoredUsername(username);
-    socket.emit('chat:join', { username });
+    const typed = nameInput.trim();
+    // Falls back to the persisted auto-generated guest name (e.g. SwiftFalcon42).
+    const username = typed || getEffectiveName();
+    if (typed) {
+      setStoredUsername(typed);
+      saveProfile({ displayName: typed });
+    }
+    socket.emit('chat:join', { username, avatar: getProfile().avatar });
     setJoined(true);
   }
 
@@ -191,11 +209,15 @@ export default function Chat() {
           <input
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
-            placeholder="Your name (optional)"
+            placeholder={`Your name (or join as ${getGuestName()})`}
             maxLength={24}
             className="input-field text-center"
           />
           <button type="submit" className="btn-primary w-full">Enter Chat</button>
+          <p className="text-center text-[10px] text-slate-500">
+            Leave the name empty to chat as <span className="font-semibold text-accent">{getGuestName()}</span>.
+            Set a picture &amp; more in Profile Settings (avatar in the header).
+          </p>
         </form>
       </div>
     );
@@ -252,7 +274,8 @@ export default function Chat() {
                 transition={{ duration: 0.25 }}
                 className="group relative"
               >
-                <div className="flex items-baseline gap-2">
+                <div className="flex items-center gap-2">
+                  <UserAvatar name={m.username} avatar={m.avatar} color={m.color} size="sm" />
                   <span className="text-sm font-semibold" style={{ color: m.color }}>
                     {m.username}
                   </span>
@@ -262,12 +285,12 @@ export default function Chat() {
                   <img
                     src={gifUrl}
                     alt="GIF"
-                    className="mt-1 max-w-[180px] rounded-lg"
+                    className="mt-1 ml-8 max-w-[180px] rounded-lg"
                     onError={e => { e.target.style.display = 'none'; }}
                   />
                 ) : (
                   <div
-                    className="mt-0.5 break-words text-sm leading-relaxed text-slate-200"
+                    className="mt-0.5 ml-8 break-words text-sm leading-relaxed text-slate-200"
                     dangerouslySetInnerHTML={{ __html: formatChatText(m.text) }}
                   />
                 )}

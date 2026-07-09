@@ -9,6 +9,9 @@ import LiveBadge from './LiveBadge.jsx';
 import WorldCupMobileFab from './WorldCupMobileFab.jsx';
 import InstallPwaPrompt from './InstallPwaPrompt.jsx';
 import ToastContainer from './Toast.jsx';
+import ProfileSettingsModal from './ProfileSettingsModal.jsx';
+import UserAvatar from './UserAvatar.jsx';
+import { getProfile, getEffectiveName, onProfileChange } from '../lib/profile.js';
 
 const NAV_LINKS = [
   { label: 'Home', path: '/' },
@@ -78,6 +81,11 @@ export default function Layout() {
   const tab = searchParams.get('tab') || 'worldcup';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profile, setProfile] = useState(getProfile);
+
+  // Keep the header avatar in sync with profile changes.
+  useEffect(() => onProfileChange(setProfile), []);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 10);
@@ -160,6 +168,21 @@ export default function Layout() {
 
             <button
               type="button"
+              onClick={() => setProfileOpen(true)}
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg transition-colors hover:bg-[var(--bg-tertiary)]"
+              aria-label="Profile settings"
+              title={`Profile: ${getEffectiveName()}`}
+            >
+              <UserAvatar
+                name={profile.displayName || getEffectiveName()}
+                avatar={profile.avatar}
+                color="#22c55e"
+                size="md"
+              />
+            </button>
+
+            <button
+              type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-[var(--text-secondary)] md:hidden"
               aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
@@ -218,6 +241,7 @@ export default function Layout() {
       <WorldCupMobileFab />
       <InstallPwaPrompt />
       <ToastContainer />
+      <ProfileSettingsModal open={profileOpen} onClose={() => setProfileOpen(false)} />
 
       <nav
         className="fixed bottom-0 left-0 right-0 z-[var(--z-header)] md:hidden border-t border-[var(--border-primary)] glass-panel safe-area-bottom"
