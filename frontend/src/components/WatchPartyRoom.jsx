@@ -12,6 +12,7 @@ import {
   copyToClipboard,
 } from '../lib/utils.js';
 import { getProfile, getEffectiveName, getEffectiveAvatar, saveProfile } from '../lib/profile.js';
+import { saveRoomSession, getRoomSession, clearRoomSession } from '../lib/roomSession.js';
 import UserAvatar from './UserAvatar.jsx';
 import { showToast } from './Toast.jsx';
 import RoomCodeDisplay from './RoomCodeDisplay.jsx';
@@ -153,6 +154,9 @@ export default function WatchPartyRoom({ partyCode = '' }) {
   const roomRef = useRef(null);
   const joinTimeoutRef = useRef(null);
   const autoJoinAttemptedRef = useRef(false);
+  // True while our socket is down (or resuming) and the server may be holding
+  // our slot — drives the "Reconnecting…" banner.
+  const [reconnecting, setReconnecting] = useState(false);
 
   // Call state
   const [inCall, setInCall] = useState(false);
@@ -331,21 +335,47 @@ export default function WatchPartyRoom({ partyCode = '' }) {
   // ---- Room socket listeners ----
   useEffect(() => {
     function applyRoom(r) { setRoom(r); setMembers(r.members || []); setHostId(r.hostId); setLocked(Boolean(r.locked)); }
-    function onCreated({ room: r }) {
+    function onCreated({ room: r, sessionToken }) {
       clearJoinTimeout();
       setBusy(false);
       setLobbyError(null);
       applyRoom(r);
       setMessages([]);
+      if (sessionToken) saveRoomSession('watchParty', { code: r.code, sessionToken });
       showToast(`Room created — code ${r.code}`, 'success');
     }
-    function onJoined({ room: r, chat }) {
+    function onJoined({ room: r, chat, sessionToken }) {
       clearJoinTimeout();
       setBusy(false);
       setLobbyError(null);
       applyRoom(r);
       setMessages(chat || []);
+      if (sessionToken) saveRoomSession('watchParty', { code: r.code, sessionToken });
       showToast(`Joined room ${r.code}`, 'success');
+    }
+    function onResumed({ room: r, chat, sessionToken }) {
+      clearJoinTimeout();
+      setBusy(false);
+      setReconnecting(false);
+      setLobbyError(null);
+      applyRoom(r);
+      setMessages(chat || []);
+      if (sessionToken) saveRoomSession('watchParty', { code: r.code, sessionToken });
+      showToast('Reconnected to the watch party', 'success');
+    }
+    function onResumeFailed({ error }) {
+      setReconnecting(false);
+      clearRoomSession('watchParty');
+      // Only reset if we were actually in a room — a stale resume attempt
+      // from the lobby should stay silent.
+      if (roomRef.current) {
+        setRoom(null);
+        setMembers([]);
+        setHostId(null);
+        setLocked(false);
+        setMessages([]);
+        showToast(error || 'Could not rejoin the party — the session expired', 'error');
+      }
     }
     function onError({ error }) {
       clearJoinTimeout();
@@ -365,6 +395,8 @@ export default function WatchPartyRoom({ partyCode = '' }) {
 
     socket.on('proom:created', onCreated);
     socket.on('proom:joined', onJoined);
+    socket.on('proom:resumed', onResumed);
+    socket.on('proom:resume-failed', onResumeFailed);
     socket.on('proom:error', onError);
     socket.on('proom:members', onMembers);
     socket.on('proom:chat', onChat);
@@ -375,6 +407,8 @@ export default function WatchPartyRoom({ partyCode = '' }) {
     return () => {
       socket.off('proom:created', onCreated);
       socket.off('proom:joined', onJoined);
+      socket.off('proom:resumed', onResumed);
+      socket.off('proom:resume-failed', onResumeFailed);
       socket.off('proom:error', onError);
       socket.off('proom:members', onMembers);
       socket.off('proom:chat', onChat);
@@ -384,12 +418,57 @@ export default function WatchPartyRoom({ partyCode = '' }) {
     };
   }, []);
 
+  // ============ Reconnection recovery (30s server-side grace) ============
+  // On transport drop while in a room: keep the room UI, show a banner, and
+  // tear down the call (WebRTC cannot survive the signaling socket).
+  // On reconnect: present the stored session token to reclaim our slot.
+  const resumePendingRef = useRef(false);
+  useEffect(() => {
+    function tryResume() {
+      // Only one in-flight resume at a time (mount + connect may both fire).
+      if (resumePendingRef.current) return;
+      const session = getRoomSession('watchParty');
+      if (!session) return;
+      resumePendingRef.current = true;
+      setReconnecting(true);
+      socket.emit('proom:resume', session);
+    }
+    function onResumeSettled() { resumePendingRef.current = false; }
+    function onDisconnect() {
+      resumePendingRef.current = false;
+      if (!roomRef.current) return;
+      setReconnecting(true);
+      teardownCall();
+    }
+
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect', tryResume);
+    socket.on('proom:resumed', onResumeSettled);
+    socket.on('proom:resume-failed', onResumeSettled);
+
+    // Page reload within the grace window: no room state yet, but stored
+    // credentials exist — try to resume immediately.
+    if (!roomRef.current && socket.connected) tryResume();
+
+    return () => {
+      socket.off('disconnect', onDisconnect);
+      socket.off('connect', tryResume);
+      socket.off('proom:resumed', onResumeSettled);
+      socket.off('proom:resume-failed', onResumeSettled);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Deliberate navigation away is a real leave — clear resume credentials.
   useEffect(() => {
     return () => {
       clearJoinTimeout();
       stopAllMonitors();
       teardownCall();
-      if (roomRef.current) socket.emit('proom:leave');
+      if (roomRef.current) {
+        socket.emit('proom:leave');
+        clearRoomSession('watchParty');
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -566,7 +645,17 @@ export default function WatchPartyRoom({ partyCode = '' }) {
     setCamOff(false);
   }
 
-  function hardLeave() { teardownCall(); socket.emit('proom:leave'); setRoom(null); setMembers([]); setHostId(null); setLocked(false); setJoinCode(''); }
+  function hardLeave() {
+    teardownCall();
+    socket.emit('proom:leave');
+    clearRoomSession('watchParty');
+    setReconnecting(false);
+    setRoom(null);
+    setMembers([]);
+    setHostId(null);
+    setLocked(false);
+    setJoinCode('');
+  }
   function leaveRoom() { hardLeave(); showToast('You left the room', 'success'); }
 
   async function joinCall(mode) {
@@ -708,9 +797,19 @@ export default function WatchPartyRoom({ partyCode = '' }) {
   const totalInCall = callParticipants.length;
   const emptySlots = Math.max(0, MAX_SLOTS - totalInCall);
   const activeCallExists = members.some((m) => m.inCall);
+  const disconnectedMembers = members.filter((m) => m.disconnected);
 
   return (
     <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden">
+      {/* Reconnecting banner — shown while our slot is held by the server */}
+      {reconnecting && (
+        <div className="flex items-center justify-center gap-2 border-b border-yellow-500/25 bg-yellow-500/10 px-4 py-2" role="status">
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-yellow-400 border-t-transparent" aria-hidden="true" />
+          <span className="text-xs font-semibold text-yellow-300">
+            Connection lost — reconnecting to the watch party…
+          </span>
+        </div>
+      )}
       {/* Header */}
       <div className="border-b border-[var(--border-primary)] px-4 py-3 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -738,6 +837,17 @@ export default function WatchPartyRoom({ partyCode = '' }) {
         </div>
 
         <RoomCodeDisplay code={room.code} onCopy={copyCode} copied={codeCopied} />
+
+        {/* Members in the reconnect grace period */}
+        {disconnectedMembers.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5" role="status">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-orange-400" aria-hidden="true" />
+            <span className="text-[11px] text-orange-300">
+              {disconnectedMembers.map((m) => m.username).join(', ')}{' '}
+              {disconnectedMembers.length === 1 ? 'is' : 'are'} reconnecting…
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Call area or Join CTA */}

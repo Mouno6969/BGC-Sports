@@ -20,6 +20,7 @@ import {
   copyToClipboard,
 } from '../lib/utils.js';
 import { getProfile, getEffectiveName, getEffectiveAvatar, saveProfile } from '../lib/profile.js';
+import { saveRoomSession, getRoomSession, clearRoomSession } from '../lib/roomSession.js';
 import UserAvatar from './UserAvatar.jsx';
 import { showToast } from './Toast.jsx';
 import RoomCodeDisplay from './RoomCodeDisplay.jsx';
@@ -125,6 +126,11 @@ export default function PrivateRoom() {
   const [joinCode, setJoinCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
+  // True while our socket is down (or resuming) and the server may be holding
+  // our slot — drives the "Reconnecting…" banner.
+  const [reconnecting, setReconnecting] = useState(false);
+  const roomRef = useRef(null);
+  useEffect(() => { roomRef.current = room; }, [room]);
 
   // ---- chat ----
   const [messages, setMessages] = useState([]);
@@ -286,17 +292,41 @@ export default function PrivateRoom() {
       setHostId(r.hostId);
       setLocked(Boolean(r.locked));
     }
-    function onCreated({ room: r }) {
+    function onCreated({ room: r, sessionToken }) {
       setBusy(false);
       applyRoom(r);
       setMessages([]);
+      if (sessionToken) saveRoomSession('privateRoom', { code: r.code, sessionToken });
       showToast(`Room created — code ${r.code}`, 'success');
     }
-    function onJoined({ room: r, chat }) {
+    function onJoined({ room: r, chat, sessionToken }) {
       setBusy(false);
       applyRoom(r);
       setMessages(chat || []);
+      if (sessionToken) saveRoomSession('privateRoom', { code: r.code, sessionToken });
       showToast(`Joined room ${r.code}`, 'success');
+    }
+    function onResumed({ room: r, chat, sessionToken }) {
+      setBusy(false);
+      setReconnecting(false);
+      applyRoom(r);
+      setMessages(chat || []);
+      if (sessionToken) saveRoomSession('privateRoom', { code: r.code, sessionToken });
+      showToast('Reconnected to the room', 'success');
+    }
+    function onResumeFailed({ error }) {
+      setReconnecting(false);
+      clearRoomSession('privateRoom');
+      // Only reset if we were actually showing a room — a stale resume attempt
+      // from the lobby should stay silent.
+      if (roomRef.current) {
+        setRoom(null);
+        setMembers([]);
+        setHostId(null);
+        setLocked(false);
+        setMessages([]);
+        showToast(error || 'Could not rejoin the room — the session expired', 'error');
+      }
     }
     function onError({ error }) {
       setBusy(false);
@@ -324,6 +354,8 @@ export default function PrivateRoom() {
 
     socket.on('proom:created', onCreated);
     socket.on('proom:joined', onJoined);
+    socket.on('proom:resumed', onResumed);
+    socket.on('proom:resume-failed', onResumeFailed);
     socket.on('proom:error', onError);
     socket.on('proom:members', onMembers);
     socket.on('proom:chat', onChat);
@@ -334,6 +366,8 @@ export default function PrivateRoom() {
     return () => {
       socket.off('proom:created', onCreated);
       socket.off('proom:joined', onJoined);
+      socket.off('proom:resumed', onResumed);
+      socket.off('proom:resume-failed', onResumeFailed);
       socket.off('proom:error', onError);
       socket.off('proom:members', onMembers);
       socket.off('proom:chat', onChat);
@@ -344,12 +378,58 @@ export default function PrivateRoom() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ============ Reconnection recovery (30s server-side grace) ============
+  // On transport drop while in a room: keep the room UI, show a banner, and
+  // tear down the call (WebRTC cannot survive the signaling socket).
+  // On reconnect: present the stored session token to reclaim our slot.
+  const resumePendingRef = useRef(false);
+  useEffect(() => {
+    function tryResume() {
+      // Only one in-flight resume at a time (mount + connect may both fire).
+      if (resumePendingRef.current) return;
+      const session = getRoomSession('privateRoom');
+      if (!session) return;
+      resumePendingRef.current = true;
+      setReconnecting(true);
+      socket.emit('proom:resume', session);
+    }
+    function onResumeSettled() { resumePendingRef.current = false; }
+    function onDisconnect() {
+      resumePendingRef.current = false;
+      if (!roomRef.current) return;
+      setReconnecting(true);
+      teardownCall();
+    }
+
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect', tryResume);
+    socket.on('proom:resumed', onResumeSettled);
+    socket.on('proom:resume-failed', onResumeSettled);
+
+    // Page reload within the grace window: no room state yet, but stored
+    // credentials exist — try to resume immediately.
+    if (!roomRef.current && socket.connected) tryResume();
+
+    return () => {
+      socket.off('disconnect', onDisconnect);
+      socket.off('connect', tryResume);
+      socket.off('proom:resumed', onResumeSettled);
+      socket.off('proom:resume-failed', onResumeSettled);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Leave the room when the component unmounts (tab switch / navigation).
+  // Deliberate navigation is a real leave — clear the resume credentials so
+  // we don't silently rejoin later.
   useEffect(() => {
     return () => {
       stopAllMonitors();
       teardownCall();
-      socket.emit('proom:leave');
+      if (roomRef.current) {
+        socket.emit('proom:leave');
+        clearRoomSession('privateRoom');
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -532,6 +612,8 @@ export default function PrivateRoom() {
   function hardLeave() {
     teardownCall();
     socket.emit('proom:leave');
+    clearRoomSession('privateRoom');
+    setReconnecting(false);
     setRoom(null);
     setMembers([]);
     setHostId(null);
@@ -705,6 +787,15 @@ export default function PrivateRoom() {
 
   return (
     <div className="flex h-full flex-col">
+      {/* Reconnecting banner — shown while our slot is held by the server */}
+      {reconnecting && (
+        <div className="flex items-center justify-center gap-2 border-b border-yellow-500/25 bg-yellow-500/10 px-3 py-2" role="status">
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-yellow-400 border-t-transparent" aria-hidden="true" />
+          <span className="text-[11px] font-semibold text-yellow-300">
+            Connection lost — reconnecting to the room…
+          </span>
+        </div>
+      )}
       {/* Header: room code + host badge + leave */}
       <div className="space-y-3 border-b border-[var(--border-primary)] px-3 py-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -884,7 +975,7 @@ export default function PrivateRoom() {
               const memberIsHost = m.id === hostId;
               const isMe = m.id === mySocketId;
               return (
-                <li key={m.id} className="flex items-center justify-between gap-2 rounded-lg bg-[var(--bg-tertiary)]/40 px-2 py-1.5">
+                <li key={m.id} className={`flex items-center justify-between gap-2 rounded-lg bg-[var(--bg-tertiary)]/40 px-2 py-1.5 ${m.disconnected ? 'opacity-60' : ''}`}>
                   <div className="flex items-center gap-2 min-w-0">
                     <UserAvatar name={m.username} avatar={m.avatar} color={m.color} size="sm" />
                     <span className="truncate text-xs font-medium text-[var(--text-primary)]">
@@ -892,6 +983,12 @@ export default function PrivateRoom() {
                     </span>
                     {memberIsHost && (
                       <span className="shrink-0 rounded bg-yellow-500/15 px-1 py-0.5 text-[8px] font-bold uppercase text-yellow-400">Host</span>
+                    )}
+                    {m.disconnected && (
+                      <span className="flex shrink-0 items-center gap-1 rounded bg-orange-500/15 px-1 py-0.5 text-[8px] font-bold uppercase text-orange-400">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-orange-400" aria-hidden="true" />
+                        Reconnecting…
+                      </span>
                     )}
                     {m.forceMuted && (
                       <svg className="h-3 w-3 shrink-0 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>

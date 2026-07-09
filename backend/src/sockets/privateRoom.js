@@ -9,6 +9,8 @@
 // ---- Events (client -> server) -------------------------------------------
 //   proom:create   { username, avatar? }        -> create room, become host
 //   proom:join     { code, username, avatar? }  -> join an existing room
+//   proom:resume   { code, sessionToken }       -> reclaim a held slot after a
+//                                                  brief disconnect (grace period)
 //   proom:leave    {}                           -> leave current room
 //   proom:chat     { text }                     -> send a group chat message
 //
@@ -29,10 +31,12 @@
 //   proom:transfer-host { targetId }            -> hand host to another member
 //
 // ---- Events (server -> client) -------------------------------------------
-//   proom:created     { room }
-//   proom:joined      { room, chat }
+//   proom:created     { room, sessionToken }
+//   proom:joined      { room, chat, sessionToken }
+//   proom:resumed     { room, chat, sessionToken }
+//   proom:resume-failed { error }
 //   proom:error       { error }
-//   proom:members     { hostId, locked, members }
+//   proom:members     { hostId, locked, members }   (members carry `disconnected`)
 //   proom:chat        message
 //   proom:chat-history [messages]
 //
@@ -64,6 +68,12 @@ import {
 
 const MAX_MESSAGE_LEN = 500;
 const ROOM_CODE_LEN = 6;
+
+// How long a disconnected member's slot is held before final removal.
+// Overridable via env for fast integration tests.
+const GRACE_PERIOD_MS = Number(process.env.PROOM_GRACE_MS) > 0
+  ? Number(process.env.PROOM_GRACE_MS)
+  : 30_000;
 
 function sanitizeRoomCode(raw) {
   return String(raw || '')
@@ -117,7 +127,11 @@ export function registerPrivateRoomHandlers(io, socket) {
     socket.data.proom.avatar = avatar;
     socket.join(room.code);
 
-    socket.emit('proom:created', { room: store.serialize(room.code, socket.id) });
+    socket.emit('proom:created', {
+      room: store.serialize(room.code, socket.id),
+      // Private resume secret — sent only to the owning socket.
+      sessionToken: room.members.get(socket.id).sessionToken,
+    });
     broadcastMembers(io, room.code);
   });
 
@@ -156,6 +170,8 @@ export function registerPrivateRoomHandlers(io, socket) {
     socket.emit('proom:joined', {
       room: store.serialize(result.room.code, socket.id),
       chat: result.room.chat,
+      // Private resume secret — sent only to the owning socket.
+      sessionToken: result.room.members.get(socket.id).sessionToken,
     });
 
     // System message announcing the join.
@@ -168,6 +184,53 @@ export function registerPrivateRoomHandlers(io, socket) {
     // Send the current call participants list to the newly joined user
     // so they know if a call is already in progress and can auto-join.
     const callList = callParticipants(result.room.code);
+    if (callList.length > 0) {
+      socket.emit('proom:call-participants', callList);
+    }
+  });
+
+  // ----- Resume a held slot after a brief disconnect ------------------------
+  socket.on('proom:resume', (payload = {}) => {
+    const code = sanitizeRoomCode(payload.code);
+    const sessionToken = String(payload.sessionToken || '');
+    if (code.length !== ROOM_CODE_LEN || !sessionToken) {
+      socket.emit('proom:resume-failed', { error: 'Invalid resume request' });
+      return;
+    }
+
+    // If this socket is already in a different room, leave it first.
+    if (socket.data.proom.code && socket.data.proom.code !== code) {
+      handleLeave(io, socket);
+    }
+
+    const result = store.resumeMember(code, sessionToken, socket.id);
+    if (!result.ok) {
+      socket.emit('proom:resume-failed', { error: result.error });
+      return;
+    }
+
+    const { room, member } = result;
+    socket.data.proom.code = room.code;
+    socket.data.proom.username = member.username;
+    socket.data.proom.color = member.color;
+    socket.data.proom.avatar = member.avatar;
+    socket.join(room.code);
+
+    socket.emit('proom:resumed', {
+      room: store.serialize(room.code, socket.id),
+      chat: room.chat,
+      sessionToken: member.sessionToken,
+    });
+
+    const sys = systemMessage(`${member.username} reconnected`);
+    store.pushChat(room.code, sys);
+    io.to(room.code).emit('proom:chat', sys);
+
+    broadcastMembers(io, room.code);
+
+    // Let the resumed client know about any call in progress so it can
+    // offer to rejoin (media cannot survive a socket drop, so they start fresh).
+    const callList = callParticipants(room.code);
     if (callList.length > 0) {
       socket.emit('proom:call-participants', callList);
     }
@@ -379,9 +442,9 @@ export function registerPrivateRoomHandlers(io, socket) {
     broadcastMembers(io, room.code);
   });
 
-  // ----- Disconnect cleanup -------------------------------------------------
+  // ----- Disconnect: hold the slot for a grace period -----------------------
   socket.on('disconnect', () => {
-    handleLeave(io, socket);
+    handleDisconnect(io, socket);
   });
 }
 
@@ -420,6 +483,61 @@ function leaveCall(io, socket) {
   });
   socket.leave(callRoomName(code));
   socket.to(callRoomName(code)).emit('proom:call-user-left', { id: socket.id });
+  broadcastCallParticipants(io, code);
+}
+
+/**
+ * Transport-level disconnect: instead of removing the member immediately,
+ * mark them `disconnected` and hold their slot for GRACE_PERIOD_MS so they
+ * can resume with their session token. Their call membership ends now
+ * (media cannot survive the socket drop), and the slot is finalized as a
+ * normal leave if the grace period expires without a resume.
+ */
+function handleDisconnect(io, socket) {
+  const code = socket.data.proom?.code;
+  if (!code) return;
+
+  const room = store.getRoom(code);
+  if (!room || !room.members.has(socket.id)) return;
+
+  const wasInCall = Boolean(room.members.get(socket.id)?.inCall);
+  const member = store.markDisconnected(code, socket.id);
+  if (!member) return;
+
+  // Tear down their presence in the call (peers must drop the connection).
+  if (wasInCall) {
+    io.to(callRoomName(code)).emit('proom:call-user-left', { id: socket.id });
+    broadcastCallParticipants(io, code);
+  }
+
+  const sys = systemMessage(`${member.username} lost connection — waiting for them to reconnect…`);
+  store.pushChat(code, sys);
+  io.to(code).emit('proom:chat', sys);
+
+  broadcastMembers(io, code);
+
+  const disconnectedId = socket.id;
+  store.attachRemovalTimer(code, disconnectedId, GRACE_PERIOD_MS, () => {
+    finalizeDeparture(io, code, disconnectedId, member.username);
+  });
+}
+
+/** Grace period expired without a resume — remove the member for real. */
+function finalizeDeparture(io, code, socketId, username) {
+  const room = store.getRoom(code);
+  if (!room || !room.members.has(socketId)) return;
+
+  const { room: remaining, newHostId } = store.removeMember(code, socketId);
+  if (!remaining) return; // room became empty and was deleted
+
+  const sys = systemMessage(`${username || 'A member'} left the room`);
+  store.pushChat(code, sys);
+  io.to(code).emit('proom:chat', sys);
+
+  if (newHostId) {
+    io.to(code).emit('proom:host-changed', { hostId: newHostId });
+  }
+  broadcastMembers(io, code);
   broadcastCallParticipants(io, code);
 }
 
