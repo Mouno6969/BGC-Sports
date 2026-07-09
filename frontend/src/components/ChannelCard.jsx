@@ -13,6 +13,11 @@ export default function ChannelCard({ channel, featured }) {
   const isLive = channel.group?.toLowerCase() === 'live'
     || (channel.name || '').toLowerCase().includes('live');
 
+  // NOTE: navigation keeps explicit query params (several channels share the
+  // same name as stream backups, so a name-derived slug can't disambiguate
+  // them). Pretty slug deep links (/watch/:slug) are used for SHARING — see
+  // WatchPartyRoom invite generation — where the backend verifies the slug
+  // resolves to the same stream before upgrading the URL.
   const watchUrl = `/watch?url=${encodeURIComponent(channel.url)}&name=${encodeURIComponent(channel.name)}&logo=${encodeURIComponent(channel.logo || '')}`;
 
   return (

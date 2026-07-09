@@ -13,12 +13,22 @@
 //                        micMuted,          // self mic state
 //                        camOff,            // self cam state
 //                        forceMuted,        // host-enforced mute (cannot speak)
+//                        sessionToken,      // secret token for reconnection resume
+//                        disconnected,      // true while in the reconnect grace period
+//                        disconnectedAt,    // timestamp of the disconnect (or null)
+//                        removalTimer,      // grace-period timer handle (not serialized)
 //                     }>
 //   - chat:          ring buffer of recent room chat messages
 //   - createdAt:     timestamp
 //
 // Only the host can: kick, force-mute/unmute, lock/unlock, and end the call
 // for everyone. When the host leaves, host is transferred to the next member.
+//
+// RECONNECTION RECOVERY: when a member's socket drops, their slot is kept for
+// a grace period (marked `disconnected`) instead of being removed right away.
+// The client can resume the slot from a new socket by presenting the member's
+// `sessionToken`; the store then re-keys the member entry (and hostId, if the
+// member was the host) to the new socket id.
 // ---------------------------------------------------------------------------
 
 import { customAlphabet } from 'nanoid';
@@ -26,6 +36,11 @@ import { customAlphabet } from 'nanoid';
 // 6-char codes using unambiguous uppercase letters + digits (no 0/O/1/I/L).
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const generateCode = customAlphabet(ALPHABET, 6);
+
+// Session tokens are secrets — use a long, URL-safe alphabet.
+const TOKEN_ALPHABET =
+  '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+const generateSessionToken = customAlphabet(TOKEN_ALPHABET, 32);
 
 const CHAT_HISTORY_LIMIT = 100;
 
@@ -71,6 +86,10 @@ class PrivateRoomStore {
       micMuted: false,
       camOff: false,
       forceMuted: false,
+      sessionToken: generateSessionToken(),
+      disconnected: false,
+      disconnectedAt: null,
+      removalTimer: null,
     };
   }
 
@@ -96,8 +115,9 @@ class PrivateRoomStore {
   }
 
   /**
-   * Remove a member. If the host leaves, the oldest remaining member is
-   * promoted to host. Empty rooms are deleted.
+   * Remove a member. If the host leaves, a remaining member is promoted to
+   * host (preferring CONNECTED members over ones in the reconnect grace
+   * period). Empty rooms are deleted, clearing any pending grace timers.
    * @returns {{room: object|null, removed: object|null, newHostId: string|null}}
    */
   removeMember(code, socketId) {
@@ -105,19 +125,115 @@ class PrivateRoomStore {
     if (!room) return { room: null, removed: null, newHostId: null };
 
     const removed = room.members.get(socketId) || null;
+    if (removed) this._clearRemovalTimer(removed);
     room.members.delete(socketId);
 
     if (room.members.size === 0) {
-      this.rooms.delete(room.code);
+      this._deleteRoom(room);
       return { room: null, removed, newHostId: null };
     }
 
     let newHostId = null;
     if (room.hostId === socketId) {
-      newHostId = room.members.keys().next().value;
+      newHostId = this._pickNewHost(room);
       room.hostId = newHostId;
     }
     return { room, removed, newHostId };
+  }
+
+  /** Prefer promoting a connected member; fall back to the oldest entry. */
+  _pickNewHost(room) {
+    for (const [id, member] of room.members) {
+      if (!member.disconnected) return id;
+    }
+    return room.members.keys().next().value;
+  }
+
+  /** Delete a room, clearing every member's pending grace timer. */
+  _deleteRoom(room) {
+    room.members.forEach((m) => this._clearRemovalTimer(m));
+    this.rooms.delete(room.code);
+  }
+
+  _clearRemovalTimer(member) {
+    if (member.removalTimer) {
+      clearTimeout(member.removalTimer);
+      member.removalTimer = null;
+    }
+  }
+
+  // ------------------------- reconnection recovery -------------------------
+
+  /**
+   * Mark a member as disconnected (start of the reconnect grace period).
+   * The caller is responsible for attaching a removal timer.
+   * @returns {object|null} the member, or null if not found
+   */
+  markDisconnected(code, socketId) {
+    const room = this.getRoom(code);
+    if (!room) return null;
+    const member = room.members.get(socketId);
+    if (!member) return null;
+    member.disconnected = true;
+    member.disconnectedAt = Date.now();
+    // Their socket is gone, so any call membership is over.
+    member.inCall = false;
+    member.callMode = null;
+    return member;
+  }
+
+  /** Attach (or replace) the grace-period removal timer on a member. */
+  attachRemovalTimer(code, socketId, ms, onExpire) {
+    const room = this.getRoom(code);
+    if (!room) return null;
+    const member = room.members.get(socketId);
+    if (!member) return null;
+    this._clearRemovalTimer(member);
+    member.removalTimer = setTimeout(() => {
+      member.removalTimer = null;
+      onExpire();
+    }, ms);
+    // Don't let pending grace timers keep the process alive.
+    if (typeof member.removalTimer.unref === 'function') member.removalTimer.unref();
+    return member;
+  }
+
+  /**
+   * Resume a disconnected member's slot from a new socket using their
+   * session token. Re-keys the member entry (and hostId if they were host).
+   * @returns {{ok: boolean, error?: string, room?: object, member?: object, oldId?: string}}
+   */
+  resumeMember(code, sessionToken, newSocketId) {
+    const room = this.getRoom(code);
+    if (!room) return { ok: false, error: 'Room not found' };
+    if (!sessionToken) return { ok: false, error: 'Invalid session' };
+
+    let oldId = null;
+    let member = null;
+    for (const [id, m] of room.members) {
+      if (m.sessionToken === sessionToken) {
+        oldId = id;
+        member = m;
+        break;
+      }
+    }
+    if (!member) return { ok: false, error: 'Session expired or not found' };
+    if (!member.disconnected && oldId !== newSocketId) {
+      // The original socket is still connected — refuse to hijack the slot.
+      return { ok: false, error: 'Session is still active on another connection' };
+    }
+
+    this._clearRemovalTimer(member);
+    room.members.delete(oldId);
+    member.id = newSocketId;
+    member.disconnected = false;
+    member.disconnectedAt = null;
+    room.members.set(newSocketId, member);
+
+    if (room.hostId === oldId) {
+      room.hostId = newSocketId;
+    }
+    return { ok: true, room, member, oldId };
   }
 
   setLocked(code, locked) {
@@ -146,11 +262,16 @@ class PrivateRoomStore {
     return member;
   }
 
-  /** Serialize the member list for sending over the wire. */
+  /**
+   * Serialize the member list for sending over the wire.
+   * SECURITY: never expose sessionToken (a resume secret) or timer handles.
+   */
   memberList(code) {
     const room = this.getRoom(code);
     if (!room) return [];
-    return Array.from(room.members.values());
+    return Array.from(room.members.values()).map(
+      ({ sessionToken, removalTimer, ...publicFields }) => publicFields
+    );
   }
 
   /** Serialize a room (with members) for a given requester. */

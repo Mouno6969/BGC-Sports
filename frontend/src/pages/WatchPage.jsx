@@ -1,10 +1,12 @@
 // ---------------------------------------------------------------------------
-// WatchPage — Redesigned: Video player with quality selector, fit-to-screen
-// toggle, and Watch Party Room (10-user calling grid) below the video.
-// Desktop: video top + watch party below. Chat panel on the right side.
+// WatchPage — One-screen watch experience: the stream, the Watch Party
+// (voice/video call grid + room chat), and Live Chat share the viewport on
+// both desktop and mobile via a tabbed panel. Fit-to-screen (theater mode)
+// hides all text chat while any active call keeps running in the background
+// (a floating pill exposes quick mic/leave controls).
 // ---------------------------------------------------------------------------
 import { useCallback, useEffect, useRef, useState, lazy, Suspense } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiGet, apiPost } from '../lib/config.js';
 import { isToffeeStream, isMobileDevice } from '../lib/toffee.js';
@@ -25,12 +27,85 @@ function PanelLoader() {
   );
 }
 
+// Tab switcher for the Watch Party / Live Chat panel. Both panels stay
+// mounted (hidden via CSS) so switching tabs never drops a WebRTC call.
+function PanelTabs({ active, onChange }) {
+  const tabs = [
+    {
+      id: 'party',
+      label: 'Watch Party',
+      icon: (
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'chat',
+      label: 'Live Chat',
+      icon: (
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      ),
+    },
+  ];
+  return (
+    <div className="flex gap-1 rounded-t-xl border-b border-[var(--border-primary)] bg-[var(--bg-tertiary)]/60 p-1">
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          onClick={() => onChange(t.id)}
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-all ${
+            active === t.id
+              ? 'bg-[var(--bg-secondary)] text-[var(--accent)] shadow-sm ring-1 ring-[var(--border-primary)]'
+              : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+          }`}
+        >
+          {t.icon}
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function WatchPage() {
   const [searchParams] = useSearchParams();
-  const url = searchParams.get('url') || '';
-  const name = searchParams.get('name') || 'Live Stream';
-  const logo = searchParams.get('logo') || '';
-  const source = searchParams.get('source') || '';
+  const { slug } = useParams();
+
+  // Channel resolved from a deep-link slug (/watch/:slug). Query params still
+  // take precedence so existing /watch?url=... links keep working unchanged.
+  const [slugChannel, setSlugChannel] = useState(null);
+  const [slugStatus, setSlugStatus] = useState(slug ? 'loading' : 'idle'); // idle | loading | resolved | notfound
+
+  useEffect(() => {
+    if (!slug || searchParams.get('url')) {
+      setSlugStatus(slug ? 'resolved' : 'idle');
+      return;
+    }
+    let alive = true;
+    setSlugStatus('loading');
+    apiGet(`/api/channels/by-slug/${encodeURIComponent(slug)}`)
+      .then((data) => {
+        if (!alive) return;
+        if (data?.channel?.url) {
+          setSlugChannel(data.channel);
+          setSlugStatus('resolved');
+        } else {
+          setSlugStatus('notfound');
+        }
+      })
+      .catch(() => {
+        if (alive) setSlugStatus('notfound');
+      });
+    return () => { alive = false; };
+  }, [slug, searchParams]);
+
+  const url = searchParams.get('url') || slugChannel?.url || '';
+  const name = searchParams.get('name') || slugChannel?.name || 'Live Stream';
+  const logo = searchParams.get('logo') || slugChannel?.logo || '';
+  const source = searchParams.get('source') || slugChannel?.source || '';
   const isToffee = isToffeeStream(url, source);
   const isServerProxied = needsServerProxy(url, source);
   const videoRef = useRef(null);
@@ -63,9 +138,11 @@ export default function WatchPage() {
   const [showControls, setShowControls] = useState(true);
   const hideTimer = useRef(null);
 
-  // Chat panel visibility
-  const [showChat, setShowChat] = useState(true);
+  // Active tab (party | chat) for the side/under-video panel
+  const [activePanel, setActivePanel] = useState('party');
   const isDesktop = useMediaQuery('(min-width: 1024px)');
+  // Theater mode = fit-to-screen: text chat hides, calls keep running.
+  const theater = fitToScreen;
 
   const resetHideTimer = useCallback(() => {
     setShowControls(true);
@@ -351,6 +428,46 @@ export default function WatchPage() {
     };
   }, [unlockOrientation]);
 
+  // Resolving a deep-link slug — show a loader instead of "No Channel Selected"
+  if (!url && slug && slugStatus === 'loading') {
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-16 text-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-9 w-9 animate-spin rounded-full border-2 border-[var(--accent)]/30 border-t-[var(--accent)]" role="status" aria-label="Loading" />
+          <p className="text-sm text-[var(--text-muted)]">Loading channel…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Slug didn't resolve — friendly not-found screen. If the link carried a
+  // party code, keep it usable by offering /watch?party=CODE so the invitee
+  // can still join the room from any channel.
+  if (!url && slug && slugStatus === 'notfound') {
+    const partyCode = searchParams.get('party') || searchParams.get('room') || '';
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-16 text-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent-muted)] ring-1 ring-[var(--accent)]/20">
+            <svg className="h-7 w-7 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">Channel Not Found</h2>
+          <p className="text-sm text-[var(--text-muted)]">This channel link is no longer available. It may have been renamed or removed.</p>
+          {partyCode && (
+            <p className="text-xs text-[var(--text-muted)]">
+              Your watch party code <span className="font-mono font-bold text-[var(--accent)]">{partyCode}</span> is still valid — pick any channel and join with it.
+            </p>
+          )}
+          <Link to="/" className="mt-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white active:scale-95 transition-transform">
+            Browse Channels
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   // No URL state
   if (!url) {
     return (
@@ -557,7 +674,7 @@ export default function WatchPage() {
                     <button
                       onClick={toggleFitToScreen}
                       className={`flex h-8 w-8 items-center justify-center rounded-full transition-all active:scale-90 ${fitToScreen ? 'bg-[var(--accent)]/30 text-[var(--accent)]' : 'bg-black/60 text-white'}`}
-                      title={fitToScreen ? 'Fit to screen' : 'Fill screen'}
+                      title={fitToScreen ? 'Exit theater mode' : 'Fit to screen (theater mode)'}
                     >
                       <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
@@ -637,43 +754,54 @@ export default function WatchPage() {
                 <span className="hidden sm:inline">Share</span>
               </button>
               <button
-                onClick={() => setShowChat(!showChat)}
+                onClick={() => setActivePanel(activePanel === 'chat' ? 'party' : 'chat')}
                 className="flex h-8 items-center gap-1 rounded-lg border border-[var(--border-primary)] px-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors active:scale-95 lg:hidden sm:px-3 sm:gap-1.5"
+                title={activePanel === 'chat' ? 'Show watch party' : 'Show live chat'}
               >
                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
-                <span className="hidden sm:inline">{showChat ? 'Hide' : 'Chat'}</span>
+                <span className="hidden sm:inline">{activePanel === 'chat' ? 'Party' : 'Chat'}</span>
               </button>
             </div>
           </div>
 
-          {/* ── Watch Party Room (10-user grid BELOW the stream) ── */}
-          <Suspense fallback={<PanelLoader />}>
-            <WatchPartyRoom partyCode={searchParams.get('party') || searchParams.get('room') || ''} />
-          </Suspense>
-
-          {/* Chat section (mobile only) */}
-          {!isDesktop && showChat && (
-            <div className="lg:hidden">
-              <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden h-[50vh]">
-                <div className="flex items-center gap-2 border-b border-[var(--border-primary)] px-3 py-2.5 bg-[var(--bg-tertiary)]/50">
-                  <svg className="h-4 w-4 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                  <span className="text-xs font-bold text-[var(--text-primary)]">Live Chat</span>
+          {/* ── Mobile / tablet: tabbed Watch Party + Live Chat panel right under
+              the video so match + chat + calls share one screen. Both panels
+              stay mounted at all times — hiding is CSS-only — so voice/video
+              calls keep running when the chat tab (or theater mode) is active. */}
+          {!isDesktop && (
+          <div className="lg:hidden">
+            <div className={`overflow-hidden rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] ${theater ? 'border-0 bg-transparent' : ''}`}>
+              <div className={theater ? 'hidden' : ''}>
+                <PanelTabs active={activePanel} onChange={setActivePanel} />
+              </div>
+              {/* Party panel — always mounted; `theater` swaps the full panel for
+                  a floating call pill inside WatchPartyRoom itself. */}
+              <div className={activePanel === 'party' || theater ? '' : 'hidden'}>
+                <div className={theater ? '' : 'max-h-[62vh] overflow-y-auto scrollbar-thin p-2'}>
+                  <Suspense fallback={<PanelLoader />}>
+                    <WatchPartyRoom
+                      partyCode={searchParams.get('party') || searchParams.get('room') || ''}
+                      theater={theater}
+                    />
+                  </Suspense>
                 </div>
-                <div className="h-[calc(100%-40px)]">
+              </div>
+              {/* Chat panel — hidden entirely in theater mode */}
+              <div className={activePanel === 'chat' && !theater ? '' : 'hidden'}>
+                <div className="h-[46vh] min-h-[320px]">
                   <Suspense fallback={<PanelLoader />}>
                     <Chat />
                   </Suspense>
                 </div>
               </div>
             </div>
+          </div>
           )}
 
-          {/* Related Channels */}
-          {relatedChannels.length > 0 && (
+          {/* Related Channels — tucked away in theater mode to keep focus on the match */}
+          {relatedChannels.length > 0 && !theater && (
             <section className="space-y-2">
               <h3 className="font-display text-sm font-bold text-[var(--text-primary)]">More Sports Channels</h3>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -703,18 +831,31 @@ export default function WatchPage() {
           )}
         </div>
 
-        {/* ── Right Column: Chat Panel (Desktop only) ── */}
+        {/* ── Right Column (desktop): tabbed Watch Party + Live Chat panel.
+            Both stay mounted so switching tabs (or entering theater mode)
+            never interrupts an active voice/video call. In theater mode the
+            sidebar collapses so the stream gets the full width, while the
+            party component keeps running and shows its floating call pill. */}
         {isDesktop && (
-          <aside className="hidden lg:block w-[360px] shrink-0">
-            <div className="sticky top-[100px]">
-              <div className="flex flex-col rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden h-[calc(100vh-120px)]">
-                <div className="flex items-center gap-2 border-b border-[var(--border-primary)] px-3 py-2.5 bg-[var(--bg-tertiary)]/50">
-                  <svg className="h-4 w-4 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                  <span className="text-xs font-bold text-[var(--text-primary)]">Live Chat</span>
+          <aside className={`hidden lg:block shrink-0 transition-all duration-300 ${theater ? 'w-0 overflow-visible' : 'w-[380px]'}`}>
+            <div className="sticky top-[88px]">
+              <div className={`flex flex-col rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden ${theater ? 'h-auto border-0 bg-transparent' : 'h-[calc(100vh-108px)]'}`}>
+                <div className={theater ? 'hidden' : ''}>
+                  <PanelTabs active={activePanel} onChange={setActivePanel} />
                 </div>
-                <div className="flex-1 overflow-hidden">
+                {/* Watch Party tab — the single desktop instance, never unmounted.
+                    In theater mode WatchPartyRoom hides itself and shows the
+                    floating call pill instead, so calls keep running. */}
+                <div className={`${theater ? '' : 'flex-1 overflow-y-auto scrollbar-thin p-2'} ${activePanel === 'party' || theater ? '' : 'hidden'}`}>
+                  <Suspense fallback={<PanelLoader />}>
+                    <WatchPartyRoom
+                      partyCode={searchParams.get('party') || searchParams.get('room') || ''}
+                      theater={theater}
+                    />
+                  </Suspense>
+                </div>
+                {/* Live Chat tab — hidden entirely in theater mode */}
+                <div className={`flex-1 overflow-hidden ${activePanel === 'chat' && !theater ? '' : 'hidden'}`}>
                   <Suspense fallback={<PanelLoader />}>
                     <Chat />
                   </Suspense>

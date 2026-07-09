@@ -12,6 +12,9 @@ import {
   copyToClipboard,
 } from '../lib/utils.js';
 import { getProfile, getEffectiveName, getEffectiveAvatar, saveProfile } from '../lib/profile.js';
+import { saveRoomSession, getRoomSession, clearRoomSession } from '../lib/roomSession.js';
+import { slugify } from '../lib/slug.js';
+import { apiGet } from '../lib/config.js';
 import UserAvatar from './UserAvatar.jsx';
 import { showToast } from './Toast.jsx';
 import RoomCodeDisplay from './RoomCodeDisplay.jsx';
@@ -135,7 +138,10 @@ function EmptySlotTile() {
 const ROOM_CODE_LEN = 6;
 const JOIN_TIMEOUT_MS = 15000;
 
-export default function WatchPartyRoom({ partyCode = '' }) {
+// When `theater` is true (stream fit-to-screen), the full panel is visually
+// hidden but stays MOUNTED so WebRTC calls keep running in the background.
+// A compact floating pill surfaces call status + quick controls instead.
+export default function WatchPartyRoom({ partyCode = '', theater = false }) {
   const { connected } = useSocket();
   const username = getEffectiveName();
   const myAvatar = getEffectiveAvatar();
@@ -153,6 +159,9 @@ export default function WatchPartyRoom({ partyCode = '' }) {
   const roomRef = useRef(null);
   const joinTimeoutRef = useRef(null);
   const autoJoinAttemptedRef = useRef(false);
+  // True while our socket is down (or resuming) and the server may be holding
+  // our slot — drives the "Reconnecting…" banner.
+  const [reconnecting, setReconnecting] = useState(false);
 
   // Call state
   const [inCall, setInCall] = useState(false);
@@ -331,21 +340,47 @@ export default function WatchPartyRoom({ partyCode = '' }) {
   // ---- Room socket listeners ----
   useEffect(() => {
     function applyRoom(r) { setRoom(r); setMembers(r.members || []); setHostId(r.hostId); setLocked(Boolean(r.locked)); }
-    function onCreated({ room: r }) {
+    function onCreated({ room: r, sessionToken }) {
       clearJoinTimeout();
       setBusy(false);
       setLobbyError(null);
       applyRoom(r);
       setMessages([]);
+      if (sessionToken) saveRoomSession('watchParty', { code: r.code, sessionToken });
       showToast(`Room created — code ${r.code}`, 'success');
     }
-    function onJoined({ room: r, chat }) {
+    function onJoined({ room: r, chat, sessionToken }) {
       clearJoinTimeout();
       setBusy(false);
       setLobbyError(null);
       applyRoom(r);
       setMessages(chat || []);
+      if (sessionToken) saveRoomSession('watchParty', { code: r.code, sessionToken });
       showToast(`Joined room ${r.code}`, 'success');
+    }
+    function onResumed({ room: r, chat, sessionToken }) {
+      clearJoinTimeout();
+      setBusy(false);
+      setReconnecting(false);
+      setLobbyError(null);
+      applyRoom(r);
+      setMessages(chat || []);
+      if (sessionToken) saveRoomSession('watchParty', { code: r.code, sessionToken });
+      showToast('Reconnected to the watch party', 'success');
+    }
+    function onResumeFailed({ error }) {
+      setReconnecting(false);
+      clearRoomSession('watchParty');
+      // Only reset if we were actually in a room — a stale resume attempt
+      // from the lobby should stay silent.
+      if (roomRef.current) {
+        setRoom(null);
+        setMembers([]);
+        setHostId(null);
+        setLocked(false);
+        setMessages([]);
+        showToast(error || 'Could not rejoin the party — the session expired', 'error');
+      }
     }
     function onError({ error }) {
       clearJoinTimeout();
@@ -365,6 +400,8 @@ export default function WatchPartyRoom({ partyCode = '' }) {
 
     socket.on('proom:created', onCreated);
     socket.on('proom:joined', onJoined);
+    socket.on('proom:resumed', onResumed);
+    socket.on('proom:resume-failed', onResumeFailed);
     socket.on('proom:error', onError);
     socket.on('proom:members', onMembers);
     socket.on('proom:chat', onChat);
@@ -375,6 +412,8 @@ export default function WatchPartyRoom({ partyCode = '' }) {
     return () => {
       socket.off('proom:created', onCreated);
       socket.off('proom:joined', onJoined);
+      socket.off('proom:resumed', onResumed);
+      socket.off('proom:resume-failed', onResumeFailed);
       socket.off('proom:error', onError);
       socket.off('proom:members', onMembers);
       socket.off('proom:chat', onChat);
@@ -384,12 +423,57 @@ export default function WatchPartyRoom({ partyCode = '' }) {
     };
   }, []);
 
+  // ============ Reconnection recovery (30s server-side grace) ============
+  // On transport drop while in a room: keep the room UI, show a banner, and
+  // tear down the call (WebRTC cannot survive the signaling socket).
+  // On reconnect: present the stored session token to reclaim our slot.
+  const resumePendingRef = useRef(false);
+  useEffect(() => {
+    function tryResume() {
+      // Only one in-flight resume at a time (mount + connect may both fire).
+      if (resumePendingRef.current) return;
+      const session = getRoomSession('watchParty');
+      if (!session) return;
+      resumePendingRef.current = true;
+      setReconnecting(true);
+      socket.emit('proom:resume', session);
+    }
+    function onResumeSettled() { resumePendingRef.current = false; }
+    function onDisconnect() {
+      resumePendingRef.current = false;
+      if (!roomRef.current) return;
+      setReconnecting(true);
+      teardownCall();
+    }
+
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect', tryResume);
+    socket.on('proom:resumed', onResumeSettled);
+    socket.on('proom:resume-failed', onResumeSettled);
+
+    // Page reload within the grace window: no room state yet, but stored
+    // credentials exist — try to resume immediately.
+    if (!roomRef.current && socket.connected) tryResume();
+
+    return () => {
+      socket.off('disconnect', onDisconnect);
+      socket.off('connect', tryResume);
+      socket.off('proom:resumed', onResumeSettled);
+      socket.off('proom:resume-failed', onResumeSettled);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Deliberate navigation away is a real leave — clear resume credentials.
   useEffect(() => {
     return () => {
       clearJoinTimeout();
       stopAllMonitors();
       teardownCall();
-      if (roomRef.current) socket.emit('proom:leave');
+      if (roomRef.current) {
+        socket.emit('proom:leave');
+        clearRoomSession('watchParty');
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -566,7 +650,17 @@ export default function WatchPartyRoom({ partyCode = '' }) {
     setCamOff(false);
   }
 
-  function hardLeave() { teardownCall(); socket.emit('proom:leave'); setRoom(null); setMembers([]); setHostId(null); setLocked(false); setJoinCode(''); }
+  function hardLeave() {
+    teardownCall();
+    socket.emit('proom:leave');
+    clearRoomSession('watchParty');
+    setReconnecting(false);
+    setRoom(null);
+    setMembers([]);
+    setHostId(null);
+    setLocked(false);
+    setJoinCode('');
+  }
   function leaveRoom() { hardLeave(); showToast('You left the room', 'success'); }
 
   async function joinCall(mode) {
@@ -606,9 +700,56 @@ export default function WatchPartyRoom({ partyCode = '' }) {
     if (track) { const next = !camOff; track.enabled = !next; setCamOff(next); socket.emit('proom:cam', { camOff: next }); }
   }
 
+  // Build a shareable invite that deep-links to the CURRENT channel with the
+  // party pre-joined. Prefers pretty slug URLs (/watch/bein-sports-1?party=ABC123)
+  // when on a slug route or when the channel name is known; otherwise preserves
+  // the current query params (url/name/logo/source) and appends party=CODE.
+  function buildInviteUrl(code) {
+    const { origin, pathname, search } = window.location;
+    const params = new URLSearchParams(search);
+    params.delete('party');
+    params.delete('room');
+
+    // Already on a pretty slug route (/watch/:slug) — keep it as-is.
+    const slugMatch = pathname.match(/^\/watch\/([^/]+)$/);
+    if (slugMatch) {
+      const rest = params.toString();
+      return `${origin}${pathname}?${rest ? `${rest}&` : ''}party=${code}`;
+    }
+
+    // Fallback: preserve whatever context the current URL has (url/name/logo/
+    // source query params, custom stream URLs, etc.) and merge in the party code.
+    const rest = params.toString();
+    return `${origin}${pathname}?${rest ? `${rest}&` : ''}party=${code}`;
+  }
+
+  // Try to upgrade a query-param watch URL to a pretty slug deep link
+  // (/watch/bein-sports-1?party=CODE). Only used when the backend confirms the
+  // slug resolves to the SAME stream url, so invites never break for custom
+  // streams or channels missing from the database.
+  async function buildPrettyInviteUrl(code) {
+    const { origin, pathname, search } = window.location;
+    if (pathname !== '/watch') return null; // slug routes already pretty
+    const params = new URLSearchParams(search);
+    const channelName = params.get('name');
+    const streamUrl = params.get('url');
+    if (!channelName || !streamUrl) return null;
+    const slug = slugify(channelName);
+    if (!slug) return null;
+    try {
+      const data = await apiGet(`/api/channels/by-slug/${encodeURIComponent(slug)}`);
+      if (data?.channel?.url === streamUrl) {
+        return `${origin}/watch/${slug}?party=${code}`;
+      }
+    } catch {
+      /* slug not resolvable — fall back to query-param invite */
+    }
+    return null;
+  }
+
   async function copyCode() {
     if (!room) return;
-    const inviteUrl = `${window.location.origin}/watch?party=${room.code}`;
+    const inviteUrl = (await buildPrettyInviteUrl(room.code)) || buildInviteUrl(room.code);
     const ok = await copyToClipboard(inviteUrl);
     if (ok) {
       setCodeCopied(true);
@@ -633,10 +774,61 @@ export default function WatchPartyRoom({ partyCode = '' }) {
 
   // ========== RENDER ==========
 
+  // Theater mode: hide the panel visually but keep it mounted so any active
+  // call keeps running. Surface a floating pill with quick call controls.
+  const theaterPill = theater ? (
+    <div className="fixed bottom-20 right-4 z-40 md:bottom-6">
+      {inCall ? (
+        <div className="flex items-center gap-1.5 rounded-full border border-[var(--accent)]/40 bg-[var(--bg-secondary)]/95 py-1.5 pl-3 pr-1.5 shadow-xl backdrop-blur">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--accent)] opacity-60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--accent)]" />
+          </span>
+          <span className="text-xs font-bold text-[var(--text-primary)]">
+            {callMode === 'video' ? 'Video' : 'Voice'} call · {callParticipants.length}
+          </span>
+          <button
+            onClick={toggleMic}
+            title={micMuted ? 'Unmute' : 'Mute'}
+            className={`flex h-8 w-8 items-center justify-center rounded-full transition-all active:scale-90 ${
+              micMuted ? 'bg-red-500/20 text-red-400' : 'bg-[var(--accent)]/15 text-[var(--accent)]'
+            }`}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              {micMuted ? (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              )}
+            </svg>
+          </button>
+          <button
+            onClick={leaveCall}
+            title="Leave call"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white transition-all hover:bg-red-600 active:scale-90"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.279 3H5z" />
+            </svg>
+          </button>
+        </div>
+      ) : room ? (
+        <div className="flex items-center gap-2 rounded-full border border-[var(--border-primary)] bg-[var(--bg-secondary)]/95 px-3 py-2 shadow-xl backdrop-blur">
+          <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
+          <span className="text-xs font-semibold text-[var(--text-secondary)]">
+            Party {room.code} · {members.length} in room
+          </span>
+        </div>
+      ) : null}
+    </div>
+  ) : null;
+
   // Lobby — not in a room yet
   if (!room) {
     return (
-      <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-6">
+      <>
+      {theaterPill}
+      <div className={`rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-6 ${theater ? 'hidden' : ''}`}>
         <div className="flex items-center gap-3 mb-5">
           <div className="h-1 w-1 rounded-full bg-[var(--accent)]" />
           <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">Watch Party Room</h2>
@@ -699,6 +891,7 @@ export default function WatchPartyRoom({ partyCode = '' }) {
           </form>
         </div>
       </div>
+      </>
     );
   }
 
@@ -707,10 +900,26 @@ export default function WatchPartyRoom({ partyCode = '' }) {
   const myCallParticipant = callParticipants.find((p) => p.id === mySocketId);
   const totalInCall = callParticipants.length;
   const emptySlots = Math.max(0, MAX_SLOTS - totalInCall);
+  // Only render enough placeholders to complete the current grid row.
+  const gridCols = totalInCall <= 2 ? 2 : totalInCall <= 3 ? 3 : 5;
+  const remainder = totalInCall % gridCols;
+  const visibleEmptySlots = Math.min(emptySlots, remainder === 0 ? 0 : gridCols - remainder);
   const activeCallExists = members.some((m) => m.inCall);
+  const disconnectedMembers = members.filter((m) => m.disconnected);
 
   return (
-    <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden">
+    <>
+    {theaterPill}
+    <div className={`rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden ${theater ? 'hidden' : ''}`}>
+      {/* Reconnecting banner — shown while our slot is held by the server */}
+      {reconnecting && (
+        <div className="flex items-center justify-center gap-2 border-b border-yellow-500/25 bg-yellow-500/10 px-4 py-2" role="status">
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-yellow-400 border-t-transparent" aria-hidden="true" />
+          <span className="text-xs font-semibold text-yellow-300">
+            Connection lost — reconnecting to the watch party…
+          </span>
+        </div>
+      )}
       {/* Header */}
       <div className="border-b border-[var(--border-primary)] px-4 py-3 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -738,6 +947,17 @@ export default function WatchPartyRoom({ partyCode = '' }) {
         </div>
 
         <RoomCodeDisplay code={room.code} onCopy={copyCode} copied={codeCopied} />
+
+        {/* Members in the reconnect grace period */}
+        {disconnectedMembers.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5" role="status">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-orange-400" aria-hidden="true" />
+            <span className="text-[11px] text-orange-300">
+              {disconnectedMembers.map((m) => m.username).join(', ')}{' '}
+              {disconnectedMembers.length === 1 ? 'is' : 'are'} reconnecting…
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Call area or Join CTA */}
@@ -782,8 +1002,18 @@ export default function WatchPartyRoom({ partyCode = '' }) {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* 5x2 Grid (desktop) / responsive on mobile */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3" style={{ aspectRatio: 'auto' }}>
+            {/* Adaptive call grid — compact when few people, capped height so the
+                stream + party + chat stay on one screen */}
+            <div
+              className={`grid gap-2.5 sm:gap-3 ${
+                totalInCall <= 2
+                  ? 'grid-cols-2'
+                  : totalInCall <= 3
+                    ? 'grid-cols-3'
+                    : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'
+              }`}
+              style={{ maxHeight: 'min(44vh, 420px)', overflowY: 'auto' }}
+            >
               {/* Local user tile */}
               {myCallParticipant && (
                 <div className="aspect-[4/3]">
@@ -815,13 +1045,19 @@ export default function WatchPartyRoom({ partyCode = '' }) {
                   />
                 </div>
               ))}
-              {/* Empty slots */}
-              {Array.from({ length: emptySlots }).map((_, i) => (
+              {/* Empty slots — fill only the remainder of the current row instead
+                  of rendering 8+ placeholders that push chat off-screen */}
+              {Array.from({ length: visibleEmptySlots }).map((_, i) => (
                 <div key={`empty-${i}`} className="aspect-[4/3]">
                   <EmptySlotTile />
                 </div>
               ))}
             </div>
+            {emptySlots > 0 && (
+              <p className="text-center text-[11px] text-[var(--text-muted)]">
+                {emptySlots} open {emptySlots === 1 ? 'slot' : 'slots'} — invite friends to fill the room
+              </p>
+            )}
 
             {/* Control toolbar */}
             <div className="flex items-center justify-center gap-3 pt-2 border-t border-[var(--border-primary)]">
@@ -961,22 +1197,31 @@ export default function WatchPartyRoom({ partyCode = '' }) {
             {/* Messages */}
             <div
               ref={chatRef}
-              className="h-48 overflow-y-auto px-4 py-3 space-y-2 scrollbar-thin"
+              className="h-52 overflow-y-auto px-3 py-3 space-y-2 scrollbar-thin"
             >
               {messages.length === 0 && (
-                <p className="text-center text-xs text-[var(--text-muted)] py-4">No messages yet. Say hello!</p>
+                <div className="flex h-full flex-col items-center justify-center gap-1.5 text-center">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--accent-muted)]">
+                    <svg className="h-4 w-4 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                  </div>
+                  <p className="text-xs text-[var(--text-muted)]">No messages yet. Say hello!</p>
+                </div>
               )}
               {messages.map((msg) => (
                 <div key={msg.id} className={msg.system ? 'text-center' : ''}>
                   {msg.system ? (
-                    <span className="text-[10px] text-[var(--text-muted)] italic">{msg.text}</span>
+                    <span className="inline-block rounded-full bg-[var(--bg-tertiary)] px-2.5 py-0.5 text-[10px] italic text-[var(--text-muted)]">{msg.text}</span>
                   ) : (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-start gap-2">
                       <UserAvatar name={msg.username} avatar={msg.avatar} color={msg.color} size="xs" />
-                      <span className="shrink-0 text-xs font-bold" style={{ color: msg.color || 'var(--accent)' }}>
-                        {msg.username}:
-                      </span>
-                      <span className="text-xs text-[var(--text-secondary)] break-words min-w-0">{msg.text}</span>
+                      <div className="min-w-0 flex-1">
+                        <span className="mr-1.5 text-[11px] font-bold" style={{ color: msg.color || 'var(--accent)' }}>
+                          {msg.username}
+                        </span>
+                        <span className="break-words rounded-xl text-xs leading-relaxed text-[var(--text-secondary)]">{msg.text}</span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1004,5 +1249,6 @@ export default function WatchPartyRoom({ partyCode = '' }) {
         )}
       </div>
     </div>
+    </>
   );
 }

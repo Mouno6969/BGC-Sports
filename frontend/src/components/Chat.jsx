@@ -196,14 +196,14 @@ export default function Chat() {
   if (!joined) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-6">
-        <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 ring-1 ring-accent/20">
-          <svg className="h-7 w-7 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent-muted)] ring-1 ring-[var(--accent)]/25">
+          <svg className="h-7 w-7 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>
         </div>
         <div className="mb-4 text-center">
-          <h3 className="font-display text-base font-bold text-white">Join Live Chat</h3>
-          <p className="mt-1 text-xs text-slate-400">Chat with everyone watching the stream.</p>
+          <h3 className="font-display text-base font-bold text-[var(--text-primary)]">Join Live Chat</h3>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">Chat with everyone watching the stream.</p>
         </div>
         <form onSubmit={handleJoin} className="w-full max-w-xs space-y-3">
           <input
@@ -226,16 +226,18 @@ export default function Chat() {
   // ----- Chat screen --------------------------------------------------------
   return (
     <div className="flex h-full flex-col relative">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-ink-600/50 px-4 py-3">
-        <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white">
-          <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
+      {/* Header — subtle accent gradient strip */}
+      <div className="flex items-center justify-between border-b border-[var(--border-primary)] bg-gradient-to-r from-[var(--accent-muted)] to-transparent px-4 py-2.5">
+        <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[var(--text-primary)]">
+          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--accent-muted)]">
+            <svg className="h-3.5 w-3.5 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </span>
           Live Chat
         </h3>
-        <span className="flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-1 text-[10px] font-semibold text-accent ring-1 ring-accent/20">
-          <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulseLive" />
+        <span className="flex items-center gap-1.5 rounded-full bg-[var(--accent-muted)] px-2.5 py-1 text-[10px] font-semibold text-[var(--accent)] ring-1 ring-[var(--accent)]/20">
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] animate-pulseLive" />
           {onlineLabel}
         </span>
       </div>
@@ -243,8 +245,13 @@ export default function Chat() {
       {/* Messages */}
       <div ref={listRef} className="scrollbar-thin flex-1 space-y-2.5 overflow-y-auto px-4 py-3">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <p className="text-xs text-slate-500 italic">No messages yet — be the first to say something!</p>
+          <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent-muted)]">
+              <svg className="h-5 w-5 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h6m-6 8l-4-4V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2H11l-4 4z" />
+              </svg>
+            </div>
+            <p className="text-xs text-[var(--text-muted)]">No messages yet — be the first to cheer!</p>
           </div>
         )}
         <AnimatePresence initial={false}>
@@ -255,9 +262,9 @@ export default function Chat() {
                   key={m.id}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="text-center text-[11px] italic text-slate-500"
+                  className="text-center"
                 >
-                  {m.text}
+                  <span className="inline-block rounded-full bg-[var(--bg-tertiary)] px-2.5 py-0.5 text-[10px] italic text-[var(--text-muted)]">{m.text}</span>
                 </motion.div>
               );
             }
@@ -272,25 +279,25 @@ export default function Chat() {
                 initial={{ opacity: 0, y: 12, x: -8 }}
                 animate={{ opacity: 1, y: 0, x: 0 }}
                 transition={{ duration: 0.25 }}
-                className="group relative"
+                className="group relative -mx-2 rounded-lg px-2 py-1 transition-colors hover:bg-[var(--bg-tertiary)]/60"
               >
                 <div className="flex items-center gap-2">
                   <UserAvatar name={m.username} avatar={m.avatar} color={m.color} size="sm" />
-                  <span className="text-sm font-semibold" style={{ color: m.color }}>
+                  <span className="text-[13px] font-bold" style={{ color: m.color }}>
                     {m.username}
                   </span>
-                  <span className="text-[10px] text-slate-600">{formatTime(m.ts)}</span>
+                  <span className="text-[10px] text-[var(--text-muted)] opacity-0 transition-opacity group-hover:opacity-100">{formatTime(m.ts)}</span>
                 </div>
                 {isGif ? (
                   <img
                     src={gifUrl}
                     alt="GIF"
-                    className="mt-1 ml-8 max-w-[180px] rounded-lg"
+                    className="mt-1 ml-8 max-w-[180px] rounded-xl ring-1 ring-[var(--border-primary)]"
                     onError={e => { e.target.style.display = 'none'; }}
                   />
                 ) : (
                   <div
-                    className="mt-0.5 ml-8 break-words text-sm leading-relaxed text-slate-200"
+                    className="mt-0.5 ml-8 break-words text-sm leading-relaxed text-[var(--text-secondary)]"
                     dangerouslySetInnerHTML={{ __html: formatChatText(m.text) }}
                   />
                 )}
@@ -369,12 +376,12 @@ export default function Chat() {
       </AnimatePresence>
 
       {/* Quick emojis */}
-      <div className="flex flex-wrap gap-1 border-t border-ink-600/50 px-3 pt-2">
+      <div className="flex flex-wrap gap-1 border-t border-[var(--border-primary)] px-3 pt-2">
         {QUICK_EMOJIS.map((e) => (
           <button
             key={e}
             onClick={() => setDraft((d) => d + e)}
-            className="rounded-lg px-1.5 py-0.5 text-base transition-all hover:scale-110 hover:bg-ink-600 active:scale-95"
+            className="rounded-lg px-1.5 py-0.5 text-base transition-all hover:scale-110 hover:bg-[var(--bg-tertiary)] active:scale-95"
           >
             {e}
           </button>
@@ -452,13 +459,13 @@ export default function Chat() {
       </AnimatePresence>
 
       {/* Composer */}
-      <form onSubmit={handleSend} className="flex items-center gap-1.5 p-3">
+      <form onSubmit={handleSend} className="flex items-center gap-1.5 border-t border-[var(--border-primary)] bg-[var(--bg-tertiary)]/40 p-2.5">
         {/* Emoji button */}
         <button
           type="button"
           onClick={() => { setShowEmojiPicker(v => !v); setShowGifPicker(false); }}
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all active:scale-95 ${
-            showEmojiPicker ? 'border-accent bg-accent/10 text-accent' : 'border-ink-500/50 text-slate-400 hover:border-ink-400 hover:text-white'
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-all active:scale-95 ${
+            showEmojiPicker ? 'border-[var(--accent)] bg-[var(--accent-muted)] text-[var(--accent)]' : 'border-[var(--border-primary)] text-[var(--text-muted)] hover:border-[var(--border-secondary)] hover:text-[var(--text-primary)]'
           }`}
           title="Emoji picker"
         >
@@ -468,8 +475,8 @@ export default function Chat() {
         <button
           type="button"
           onClick={() => { setShowGifPicker(v => !v); setShowEmojiPicker(false); }}
-          className={`flex h-9 shrink-0 items-center justify-center rounded-xl border px-2 text-[10px] font-extrabold transition-all active:scale-95 ${
-            showGifPicker ? 'border-accent bg-accent/10 text-accent' : 'border-ink-500/50 text-slate-400 hover:border-ink-400 hover:text-white'
+          className={`flex h-9 shrink-0 items-center justify-center rounded-full border px-2.5 text-[10px] font-extrabold transition-all active:scale-95 ${
+            showGifPicker ? 'border-[var(--accent)] bg-[var(--accent-muted)] text-[var(--accent)]' : 'border-[var(--border-primary)] text-[var(--text-muted)] hover:border-[var(--border-secondary)] hover:text-[var(--text-primary)]'
           }`}
           title="GIF picker"
         >
@@ -478,13 +485,14 @@ export default function Chat() {
         <input
           value={draft}
           onChange={handleDraftChange}
-          placeholder="Type a message..."
+          placeholder="Say something…"
           maxLength={500}
-          className="flex-1 rounded-xl border border-ink-500/50 bg-ink-800 px-3 py-2.5 text-sm text-white outline-none transition-all duration-200 placeholder:text-slate-500 focus:border-accent focus:ring-1 focus:ring-accent/30"
+          className="min-w-0 flex-1 rounded-full border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-2.5 text-sm text-[var(--text-primary)] outline-none transition-all duration-200 placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30"
         />
         <button
           type="submit"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent text-black transition-all duration-200 hover:bg-accent-dark hover:shadow-glow-sm active:scale-[0.95]"
+          disabled={!draft.trim()}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-white transition-all duration-200 hover:bg-[var(--accent-dark)] active:scale-[0.95] disabled:opacity-40"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

@@ -6,6 +6,7 @@
 // GET  /api/channels/sports  -> sports channels only (dead filtered)
 // GET  /api/channels/groups  -> list of available groups
 // GET  /api/channels/featured -> curated featured channels (dead filtered)
+// GET  /api/channels/by-slug/:slug -> resolve a channel deep-link slug
 // POST /api/channels/report-dead -> report a stream as dead from the player
 // GET  /api/channels/health-status -> admin: view dead channel stats
 // ---------------------------------------------------------------------------
@@ -14,7 +15,8 @@ import { Router } from 'express';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { filterDead, reportDead, getDeadCount, getDeadUrls, startHealthCheckLoop } from '../utils/healthCheck.js';
+import { filterDead, isDead, reportDead, getDeadCount, getDeadUrls, startHealthCheckLoop } from '../utils/healthCheck.js';
+import { slugify } from '../utils/slug.js';
 import { requireAdmin } from './admin.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -98,6 +100,23 @@ router.get('/featured', (req, res) => {
     )
     .slice(0, 12);
   res.json({ ok: true, channels: featured });
+});
+
+// GET /api/channels/by-slug/:slug — resolve a deep-link slug to a channel.
+// Slugs are derived deterministically from channel names (no id field in the
+// dataset), first match wins for duplicate names. Dead channels are still
+// returned (with a `dead` flag) so a shared invite link can render the page
+// and let the player's own offline fallback take over.
+router.get('/by-slug/:slug', (req, res) => {
+  const slug = slugify(req.params.slug);
+  if (!slug) {
+    return res.status(400).json({ ok: false, error: 'Invalid slug' });
+  }
+  const channel = channels.find((ch) => slugify(ch.name) === slug);
+  if (!channel) {
+    return res.status(404).json({ ok: false, error: 'Channel not found' });
+  }
+  res.json({ ok: true, channel: { ...channel, slug, dead: isDead(channel.url) } });
 });
 
 // POST /api/channels/report-dead — player reports a stream as dead
