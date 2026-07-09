@@ -66,6 +66,7 @@ import {
   sanitizeAvatar,
 } from '../utils/identity.js';
 import { setupPrivateRoomAI } from './aiChat.js';
+import { sanitizeGifUrl } from './chat.js';
 
 // AI handler for private room chat (initialized once)
 let aiRoomHandler = null;
@@ -178,9 +179,8 @@ export function registerPrivateRoomHandlers(io, socket) {
       sessionToken: result.room.members.get(socket.id).sessionToken,
     });
 
-    // System message announcing the join.
+    // System message announcing the join (broadcast only, not stored in history).
     const sys = systemMessage(`${username} joined the room`);
-    store.pushChat(result.room.code, sys);
     io.to(result.room.code).emit('proom:chat', sys);
 
     broadcastMembers(io, result.room.code);
@@ -226,8 +226,8 @@ export function registerPrivateRoomHandlers(io, socket) {
       sessionToken: member.sessionToken,
     });
 
+    // Reconnect notice — broadcast only, not stored in history.
     const sys = systemMessage(`${member.username} reconnected`);
-    store.pushChat(room.code, sys);
     io.to(room.code).emit('proom:chat', sys);
 
     broadcastMembers(io, room.code);
@@ -255,9 +255,25 @@ export function registerPrivateRoomHandlers(io, socket) {
       .replace(/[<>]/g, '')
       .trim()
       .slice(0, MAX_MESSAGE_LEN);
-    if (!text) return;
+    const gif = sanitizeGifUrl(payload.gif);
+    if (!text && !gif) return;
 
     const member = room.members.get(socket.id);
+
+    // Build reply snippet if replying to another message
+    let replyTo = null;
+    if (payload.replyTo) {
+      const original = room.chat.find((m) => m.id === String(payload.replyTo));
+      if (original && !original.system) {
+        replyTo = {
+          id: original.id,
+          username: original.username,
+          color: original.color || '',
+          text: original.gif ? '[GIF]' : String(original.text || '').slice(0, 120),
+        };
+      }
+    }
+
     const msg = {
       id: nanoid(),
       username: member.username,
@@ -266,6 +282,8 @@ export function registerPrivateRoomHandlers(io, socket) {
       text,
       ts: Date.now(),
     };
+    if (gif) msg.gif = gif;
+    if (replyTo) msg.replyTo = replyTo;
     store.pushChat(code, msg);
     io.to(code).emit('proom:chat', msg);
 
@@ -376,8 +394,8 @@ export function registerPrivateRoomHandlers(io, socket) {
     // Tell remaining call peers the user left (so they tear down the PC).
     io.to(callRoomName(code)).emit('proom:call-user-left', { id: targetId });
 
+    // Kick notice — broadcast only, not stored in history.
     const sys = systemMessage('A member was removed by the host');
-    store.pushChat(code, sys);
     io.to(code).emit('proom:chat', sys);
 
     broadcastMembers(io, code);
@@ -439,8 +457,8 @@ export function registerPrivateRoomHandlers(io, socket) {
       }
     }
 
+    // Call ended notice — broadcast only, not stored in history.
     const sys = systemMessage('The host ended the call');
-    store.pushChat(code, sys);
     io.to(code).emit('proom:chat', sys);
     broadcastCallParticipants(io, code);
   });
@@ -522,8 +540,8 @@ function handleDisconnect(io, socket) {
     broadcastCallParticipants(io, code);
   }
 
+  // Disconnect notice — broadcast only, not stored in history.
   const sys = systemMessage(`${member.username} lost connection — waiting for them to reconnect…`);
-  store.pushChat(code, sys);
   io.to(code).emit('proom:chat', sys);
 
   broadcastMembers(io, code);
@@ -542,9 +560,9 @@ function finalizeDeparture(io, code, socketId, username) {
   const { room: remaining, newHostId } = store.removeMember(code, socketId);
   if (!remaining) return; // room became empty and was deleted
 
-  const sys = systemMessage(`${username || 'A member'} left the room`);
-  store.pushChat(code, sys);
-  io.to(code).emit('proom:chat', sys);
+    // Leave notice — broadcast only, not stored in history.
+    const sys = systemMessage(`${username || 'A member'} left the room`);
+    io.to(code).emit('proom:chat', sys);
 
   if (newHostId) {
     io.to(code).emit('proom:host-changed', { hostId: newHostId });
@@ -567,8 +585,8 @@ function handleLeave(io, socket) {
   socket.data.proom.code = null;
 
   if (room) {
+    // Leave notice — broadcast only, not stored in history.
     const sys = systemMessage(`${username} left the room`);
-    store.pushChat(code, sys);
     io.to(code).emit('proom:chat', sys);
 
     if (newHostId) {

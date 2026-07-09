@@ -527,11 +527,11 @@ export default function WatchPage() {
         {/* ── Left Column: Video + Info + Watch Party + Related ── */}
         <div className="flex-1 min-w-0 space-y-3">
 
-          {/* Video Player Container */}
+          {/* Video Player Container — sticky on mobile so the rest scrolls under it */}
           <div
             ref={containerRef}
             data-player-container
-            className={`player-container relative w-full overflow-hidden rounded-xl bg-black shadow-lg ring-1 ring-[var(--border-primary)] ${isFullscreen ? 'is-fullscreen' : ''}`}
+            className={`player-container relative w-full overflow-hidden rounded-xl bg-black shadow-lg ring-1 ring-[var(--border-primary)] sticky top-0 z-30 lg:relative lg:z-auto ${isFullscreen ? 'is-fullscreen' : ''}`}
             onMouseMove={resetHideTimer}
             onTouchStart={resetHideTimer}
           >

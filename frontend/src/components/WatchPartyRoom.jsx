@@ -146,7 +146,9 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
   const { connected } = useSocket();
   const username = getEffectiveName();
   const myAvatar = getEffectiveAvatar();
-  const [nameInput, setNameInput] = useState(() => getProfile().displayName || getStoredUsername());
+  // Don't pre-fill the name input so the room name doesn't default to a stored personal name.
+  // The user can still type a name, or leave it blank to use their guest identity.
+  const [nameInput, setNameInput] = useState('');
 
   // Room state
   const [room, setRoom] = useState(null);
@@ -192,6 +194,14 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
   const [draft, setDraft] = useState('');
   const chatRef = useRef(null);
   const [showRoomChat, setShowRoomChat] = useState(true);
+  const [replyTo, setReplyTo] = useState(null);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [gifQuery, setGifQuery] = useState('');
+  const [gifs, setGifs] = useState([]);
+  const [gifLoading, setGifLoading] = useState(false);
+  const gifPickerRef = useRef(null);
+  const gifSearchTimerRef = useRef(null);
+  const chatInputRef = useRef(null);
   const monitorsRef = useRef(new Map());
   const rafIdRef = useRef(null);
   const SPEAK_THRESHOLD = 0.015;
@@ -494,6 +504,35 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages]);
 
+  // GIF picker: fetch trending/search results
+  useEffect(() => {
+    if (!showGifPicker) return;
+    clearTimeout(gifSearchTimerRef.current);
+    gifSearchTimerRef.current = setTimeout(async () => {
+      setGifLoading(true);
+      try {
+        const q = gifQuery.trim() ? `?q=${encodeURIComponent(gifQuery.trim())}` : '';
+        const data = await apiGet(`/api/gifs${q}`);
+        setGifs(data.gifs || []);
+      } catch {
+        setGifs([]);
+      }
+      setGifLoading(false);
+    }, gifQuery ? 400 : 0);
+    return () => clearTimeout(gifSearchTimerRef.current);
+  }, [showGifPicker, gifQuery]);
+
+  // Close GIF picker on outside click
+  useEffect(() => {
+    function handleClick(e) {
+      if (gifPickerRef.current && !gifPickerRef.current.contains(e.target)) {
+        setShowGifPicker(false);
+      }
+    }
+    if (showGifPicker) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showGifPicker]);
+
   // ---- Peer connection ----
   const createPeerConnection = useCallback((peerId, isInitiator) => {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
@@ -763,8 +802,26 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
     e?.preventDefault();
     const text = draft.trim();
     if (!text || !room) return;
-    socket.emit('proom:chat', { text });
+    socket.emit('proom:chat', { text, replyTo: replyTo?.id || undefined });
     setDraft('');
+    setReplyTo(null);
+  }
+
+  function sendGif(gif) {
+    if (!room) return;
+    socket.emit('proom:chat', { gif: gif.url, text: '', replyTo: replyTo?.id || undefined });
+    setReplyTo(null);
+    setShowGifPicker(false);
+  }
+
+  function startReply(msg) {
+    setReplyTo({
+      id: msg.id,
+      username: msg.username,
+      color: msg.color,
+      text: msg.gif ? '[GIF]' : (msg.text || '').slice(0, 120),
+    });
+    chatInputRef.current?.focus();
   }
 
   function isSpeaking(participantId, isMuted) {
@@ -1194,7 +1251,7 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
         </button>
 
         {showRoomChat && (
-          <div className="border-t border-[var(--border-primary)]">
+          <div className="border-t border-[var(--border-primary)] relative">
             {/* Messages */}
             <div
               ref={chatRef}
@@ -1211,42 +1268,126 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
                 </div>
               )}
               {messages.map((msg) => (
-                <div key={msg.id} className={msg.system ? 'text-center' : ''}>
+                <div key={msg.id} className={msg.system ? 'text-center' : 'group'}>
                   {msg.system ? (
                     <span className="inline-block rounded-full bg-[var(--bg-tertiary)] px-2.5 py-0.5 text-[10px] italic text-[var(--text-muted)]">{msg.text}</span>
                   ) : (
-                    <div className="flex items-start gap-2">
+                    <div className="relative flex items-start gap-2 rounded-lg px-1 py-0.5 hover:bg-[var(--bg-tertiary)]/60">
                       <UserAvatar name={msg.username} avatar={msg.avatar} color={msg.color} size="xs" />
                       <div className="min-w-0 flex-1">
                         <span className="mr-1.5 text-[11px] font-bold" style={{ color: msg.color || 'var(--accent)' }}>
                           {msg.username}
                         </span>
                         {msg.isAI && <AiBotBadge />}
-                        <span className={`break-words rounded-xl text-xs leading-relaxed ${
-                          msg.isAI
-                            ? 'mt-1 block rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 text-[var(--text-primary)]'
-                            : 'text-[var(--text-secondary)]'
-                        }`}>{msg.text}</span>
+                        {/* Reply quote */}
+                        {msg.replyTo && (
+                          <div className="mt-0.5 mb-0.5 flex w-fit max-w-[85%] items-start gap-1 rounded border-l-2 bg-[var(--bg-tertiary)]/70 px-1.5 py-0.5" style={{ borderLeftColor: msg.replyTo.color || 'var(--accent)' }}>
+                            <div className="min-w-0">
+                              <span className="block text-[9px] font-bold" style={{ color: msg.replyTo.color || 'var(--accent)' }}>{msg.replyTo.username}</span>
+                              <span className="block truncate text-[9px] text-[var(--text-muted)]">{msg.replyTo.text}</span>
+                            </div>
+                          </div>
+                        )}
+                        {/* GIF or text */}
+                        {msg.gif ? (
+                          <img src={msg.gif} alt="GIF" loading="lazy" className="mt-0.5 max-w-[160px] rounded-lg ring-1 ring-[var(--border-primary)]" onError={(e) => { e.target.style.display = 'none'; }} />
+                        ) : (
+                          <span className={`break-words rounded-xl text-xs leading-relaxed ${
+                            msg.isAI
+                              ? 'mt-1 block rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 text-[var(--text-primary)]'
+                              : 'text-[var(--text-secondary)]'
+                          }`}>{msg.text}</span>
+                        )}
                       </div>
+                      {/* Reply button on hover */}
+                      <button
+                        onClick={() => startReply(msg)}
+                        className="absolute right-1 top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-[var(--bg-tertiary)] text-[var(--text-muted)] ring-1 ring-[var(--border-primary)] transition-colors hover:text-[var(--accent)] group-hover:flex"
+                        title="Reply"
+                      >
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                      </button>
                     </div>
                   )}
                 </div>
               ))}
             </div>
 
+            {/* GIF Picker — positioned above the composer */}
+            {showGifPicker && (
+              <div ref={gifPickerRef} className="absolute bottom-full left-2 right-2 z-20 mb-1 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-2 shadow-xl">
+                <input
+                  value={gifQuery}
+                  onChange={(e) => setGifQuery(e.target.value)}
+                  placeholder="Search GIFs..."
+                  className="mb-2 w-full rounded-lg border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]"
+                />
+                {gifLoading ? (
+                  <div className="flex h-24 items-center justify-center">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--accent)]/30 border-t-[var(--accent)]" />
+                  </div>
+                ) : gifs.length === 0 ? (
+                  <p className="py-4 text-center text-[10px] text-[var(--text-muted)]">No GIFs found</p>
+                ) : (
+                  <div className="grid max-h-40 grid-cols-2 gap-1.5 overflow-y-auto scrollbar-thin">
+                    {gifs.map((gif) => (
+                      <button key={gif.id} onClick={() => sendGif(gif)} className="relative overflow-hidden rounded-lg bg-[var(--bg-tertiary)] aspect-video hover:ring-2 hover:ring-[var(--accent)] transition-all">
+                        <img src={gif.preview} alt={gif.title} loading="lazy" className="h-full w-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-1 text-center text-[8px] text-[var(--text-muted)]">Powered by GIPHY</p>
+              </div>
+            )}
+
+            {/* Reply banner */}
+            {replyTo && (
+              <div className="flex items-center gap-2 border-t border-[var(--border-primary)] bg-[var(--bg-tertiary)]/60 px-3 py-1.5">
+                <svg className="h-3 w-3 shrink-0 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+                <div className="min-w-0 flex-1">
+                  <span className="block text-[9px] font-bold" style={{ color: replyTo.color || 'var(--accent)' }}>Replying to {replyTo.username}</span>
+                  <span className="block truncate text-[9px] text-[var(--text-muted)]">{replyTo.text}</span>
+                </div>
+                <button onClick={() => setReplyTo(null)} className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] hover:text-[var(--text-primary)]" title="Cancel reply">
+                  <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
+
             {/* Composer */}
-            <form onSubmit={sendChat} className="flex gap-2 border-t border-[var(--border-primary)] px-4 py-2.5">
+            <form onSubmit={sendChat} className="flex items-center gap-1.5 border-t border-[var(--border-primary)] px-3 py-2">
+              {/* GIF button */}
+              <button
+                type="button"
+                onClick={() => setShowGifPicker((v) => !v)}
+                className={`flex h-7 shrink-0 items-center justify-center rounded-full border px-2 text-[9px] font-extrabold transition-all active:scale-95 ${
+                  showGifPicker
+                    ? 'border-[var(--accent)] bg-[var(--accent-muted)] text-[var(--accent)]'
+                    : 'border-[var(--border-primary)] text-[var(--text-muted)] hover:border-[var(--border-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+                title="GIF picker"
+              >
+                GIF
+              </button>
               <input
+                ref={chatInputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Type a message... (@bgc for AI)"
                 maxLength={500}
-                className="flex-1 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-3 py-2 text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30"
+                className="min-w-0 flex-1 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-3 py-1.5 text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30"
               />
               <button
                 type="submit"
                 disabled={!draft.trim()}
-                className="shrink-0 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-bold text-white transition-all hover:bg-[var(--accent-dark)] active:scale-[0.95] disabled:opacity-40"
+                className="shrink-0 rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-[var(--accent-dark)] active:scale-[0.95] disabled:opacity-40"
               >
                 Send
               </button>
