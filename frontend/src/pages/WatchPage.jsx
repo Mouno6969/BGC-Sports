@@ -4,7 +4,7 @@
 // Desktop: video top + watch party below. Chat panel on the right side.
 // ---------------------------------------------------------------------------
 import { useCallback, useEffect, useRef, useState, lazy, Suspense } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiGet, apiPost } from '../lib/config.js';
 import { isToffeeStream, isMobileDevice } from '../lib/toffee.js';
@@ -27,10 +27,40 @@ function PanelLoader() {
 
 export default function WatchPage() {
   const [searchParams] = useSearchParams();
-  const url = searchParams.get('url') || '';
-  const name = searchParams.get('name') || 'Live Stream';
-  const logo = searchParams.get('logo') || '';
-  const source = searchParams.get('source') || '';
+  const { slug } = useParams();
+
+  // Channel resolved from a deep-link slug (/watch/:slug). Query params still
+  // take precedence so existing /watch?url=... links keep working unchanged.
+  const [slugChannel, setSlugChannel] = useState(null);
+  const [slugStatus, setSlugStatus] = useState(slug ? 'loading' : 'idle'); // idle | loading | resolved | notfound
+
+  useEffect(() => {
+    if (!slug || searchParams.get('url')) {
+      setSlugStatus(slug ? 'resolved' : 'idle');
+      return;
+    }
+    let alive = true;
+    setSlugStatus('loading');
+    apiGet(`/api/channels/by-slug/${encodeURIComponent(slug)}`)
+      .then((data) => {
+        if (!alive) return;
+        if (data?.channel?.url) {
+          setSlugChannel(data.channel);
+          setSlugStatus('resolved');
+        } else {
+          setSlugStatus('notfound');
+        }
+      })
+      .catch(() => {
+        if (alive) setSlugStatus('notfound');
+      });
+    return () => { alive = false; };
+  }, [slug, searchParams]);
+
+  const url = searchParams.get('url') || slugChannel?.url || '';
+  const name = searchParams.get('name') || slugChannel?.name || 'Live Stream';
+  const logo = searchParams.get('logo') || slugChannel?.logo || '';
+  const source = searchParams.get('source') || slugChannel?.source || '';
   const isToffee = isToffeeStream(url, source);
   const isServerProxied = needsServerProxy(url, source);
   const videoRef = useRef(null);
@@ -350,6 +380,46 @@ export default function WatchPage() {
       unlockOrientation();
     };
   }, [unlockOrientation]);
+
+  // Resolving a deep-link slug — show a loader instead of "No Channel Selected"
+  if (!url && slug && slugStatus === 'loading') {
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-16 text-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-9 w-9 animate-spin rounded-full border-2 border-[var(--accent)]/30 border-t-[var(--accent)]" role="status" aria-label="Loading" />
+          <p className="text-sm text-[var(--text-muted)]">Loading channel…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Slug didn't resolve — friendly not-found screen. If the link carried a
+  // party code, keep it usable by offering /watch?party=CODE so the invitee
+  // can still join the room from any channel.
+  if (!url && slug && slugStatus === 'notfound') {
+    const partyCode = searchParams.get('party') || searchParams.get('room') || '';
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-16 text-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent-muted)] ring-1 ring-[var(--accent)]/20">
+            <svg className="h-7 w-7 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">Channel Not Found</h2>
+          <p className="text-sm text-[var(--text-muted)]">This channel link is no longer available. It may have been renamed or removed.</p>
+          {partyCode && (
+            <p className="text-xs text-[var(--text-muted)]">
+              Your watch party code <span className="font-mono font-bold text-[var(--accent)]">{partyCode}</span> is still valid — pick any channel and join with it.
+            </p>
+          )}
+          <Link to="/" className="mt-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white active:scale-95 transition-transform">
+            Browse Channels
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   // No URL state
   if (!url) {

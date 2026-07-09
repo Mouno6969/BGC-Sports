@@ -13,6 +13,8 @@ import {
 } from '../lib/utils.js';
 import { getProfile, getEffectiveName, getEffectiveAvatar, saveProfile } from '../lib/profile.js';
 import { saveRoomSession, getRoomSession, clearRoomSession } from '../lib/roomSession.js';
+import { slugify } from '../lib/slug.js';
+import { apiGet } from '../lib/config.js';
 import UserAvatar from './UserAvatar.jsx';
 import { showToast } from './Toast.jsx';
 import RoomCodeDisplay from './RoomCodeDisplay.jsx';
@@ -695,9 +697,56 @@ export default function WatchPartyRoom({ partyCode = '' }) {
     if (track) { const next = !camOff; track.enabled = !next; setCamOff(next); socket.emit('proom:cam', { camOff: next }); }
   }
 
+  // Build a shareable invite that deep-links to the CURRENT channel with the
+  // party pre-joined. Prefers pretty slug URLs (/watch/bein-sports-1?party=ABC123)
+  // when on a slug route or when the channel name is known; otherwise preserves
+  // the current query params (url/name/logo/source) and appends party=CODE.
+  function buildInviteUrl(code) {
+    const { origin, pathname, search } = window.location;
+    const params = new URLSearchParams(search);
+    params.delete('party');
+    params.delete('room');
+
+    // Already on a pretty slug route (/watch/:slug) — keep it as-is.
+    const slugMatch = pathname.match(/^\/watch\/([^/]+)$/);
+    if (slugMatch) {
+      const rest = params.toString();
+      return `${origin}${pathname}?${rest ? `${rest}&` : ''}party=${code}`;
+    }
+
+    // Fallback: preserve whatever context the current URL has (url/name/logo/
+    // source query params, custom stream URLs, etc.) and merge in the party code.
+    const rest = params.toString();
+    return `${origin}${pathname}?${rest ? `${rest}&` : ''}party=${code}`;
+  }
+
+  // Try to upgrade a query-param watch URL to a pretty slug deep link
+  // (/watch/bein-sports-1?party=CODE). Only used when the backend confirms the
+  // slug resolves to the SAME stream url, so invites never break for custom
+  // streams or channels missing from the database.
+  async function buildPrettyInviteUrl(code) {
+    const { origin, pathname, search } = window.location;
+    if (pathname !== '/watch') return null; // slug routes already pretty
+    const params = new URLSearchParams(search);
+    const channelName = params.get('name');
+    const streamUrl = params.get('url');
+    if (!channelName || !streamUrl) return null;
+    const slug = slugify(channelName);
+    if (!slug) return null;
+    try {
+      const data = await apiGet(`/api/channels/by-slug/${encodeURIComponent(slug)}`);
+      if (data?.channel?.url === streamUrl) {
+        return `${origin}/watch/${slug}?party=${code}`;
+      }
+    } catch {
+      /* slug not resolvable — fall back to query-param invite */
+    }
+    return null;
+  }
+
   async function copyCode() {
     if (!room) return;
-    const inviteUrl = `${window.location.origin}/watch?party=${room.code}`;
+    const inviteUrl = (await buildPrettyInviteUrl(room.code)) || buildInviteUrl(room.code);
     const ok = await copyToClipboard(inviteUrl);
     if (ok) {
       setCodeCopied(true);

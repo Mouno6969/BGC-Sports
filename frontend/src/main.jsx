@@ -38,6 +38,7 @@ createRoot(document.getElementById('root')).render(
             <Route element={<Layout />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/watch" element={<WatchPage />} />
+              <Route path="/watch/:slug" element={<WatchPage />} />
               <Route path="/category/:group" element={<CategoryPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
