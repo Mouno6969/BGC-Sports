@@ -521,17 +521,17 @@ export default function WatchPage() {
   const currentQualityLabel = currentLevel === -1 ? 'Auto' : availableLevels[currentLevel]?.label || 'Auto';
 
   return (
-    <div className="page-container max-w-[1600px] py-3 md:py-4">
+    <div className="page-container max-w-[1600px] py-0 md:py-4 !px-0 md:!px-4 lg:!px-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
 
         {/* ── Left Column: Video + Info + Watch Party + Related ── */}
-        <div className="flex-1 min-w-0 space-y-3">
+        <div className="flex-1 min-w-0 space-y-0 md:space-y-3">
 
-          {/* Video Player Container — sticky on mobile so the rest scrolls under it */}
+          {/* Video Player Container */}
           <div
             ref={containerRef}
             data-player-container
-            className={`player-container relative w-full overflow-hidden rounded-xl bg-black shadow-lg ring-1 ring-[var(--border-primary)] sticky top-0 z-30 lg:relative lg:z-auto ${isFullscreen ? 'is-fullscreen' : ''}`}
+            className={`player-container relative w-full overflow-hidden rounded-none sm:rounded-xl bg-black shadow-lg ring-0 sm:ring-1 ring-[var(--border-primary)] ${isFullscreen ? 'is-fullscreen' : ''}`}
             onMouseMove={resetHideTimer}
             onTouchStart={resetHideTimer}
           >
@@ -731,7 +731,7 @@ export default function WatchPage() {
           </div>
 
           {/* Channel Info Bar — Fixed positioning, no text overlap */}
-          <div className="flex items-center gap-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-3 py-2.5 sm:px-4 sm:py-3">
+          <div className="mx-3 mt-3 flex items-center gap-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-3 py-2.5 sm:mx-0 sm:px-4 sm:py-3">
             <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
               {logo && logo.startsWith('http') && (
                 <img src={logo} alt={name} className="h-9 w-9 shrink-0 rounded-lg object-contain bg-[var(--bg-tertiary)] p-1 sm:h-10 sm:w-10" />
@@ -779,7 +779,7 @@ export default function WatchPage() {
               stay mounted at all times — hiding is CSS-only — so voice/video
               calls keep running when the chat tab (or theater mode) is active. */}
           {!isDesktop && (
-          <div className="lg:hidden">
+          <div className="lg:hidden mx-3 sm:mx-0">
             <div className={`overflow-hidden rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] ${theater ? 'border-0 bg-transparent' : ''}`}>
               <div className={theater ? 'hidden' : ''}>
                 <PanelTabs active={activePanel} onChange={setActivePanel} />
@@ -787,7 +787,7 @@ export default function WatchPage() {
               {/* Party panel — always mounted; `theater` swaps the full panel for
                   a floating call pill inside WatchPartyRoom itself. */}
               <div className={activePanel === 'party' || theater ? '' : 'hidden'}>
-                <div className={theater ? '' : 'max-h-[62vh] overflow-y-auto scrollbar-thin p-2'}>
+                <div className={theater ? '' : 'max-h-[480px] overflow-y-auto scrollbar-thin p-2'}>
                   <Suspense fallback={<PanelLoader />}>
                     <WatchPartyRoom
                       partyCode={searchParams.get('party') || searchParams.get('room') || ''}
@@ -798,7 +798,7 @@ export default function WatchPage() {
               </div>
               {/* Chat panel — hidden entirely in theater mode */}
               <div className={activePanel === 'chat' && !theater ? '' : 'hidden'}>
-                <div className="h-[46vh] min-h-[320px]">
+                <div className="h-[420px] min-h-[320px]">
                   <Suspense fallback={<PanelLoader />}>
                     <Chat />
                   </Suspense>
@@ -806,7 +806,7 @@ export default function WatchPage() {
               </div>
               {/* AI chatroom panel — hidden entirely in theater mode */}
               <div className={activePanel === 'ai' && !theater ? '' : 'hidden'}>
-                <div className="h-[46vh] min-h-[320px]">
+                <div className="h-[420px] min-h-[320px]">
                   <Suspense fallback={<PanelLoader />}>
                     <AiChat />
                   </Suspense>
@@ -818,7 +818,7 @@ export default function WatchPage() {
 
           {/* Related Channels — tucked away in theater mode to keep focus on the match */}
           {relatedChannels.length > 0 && !theater && (
-            <section className="space-y-2">
+            <section className="mx-3 space-y-2 sm:mx-0">
               <h3 className="font-display text-sm font-bold text-[var(--text-primary)]">More Sports Channels</h3>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {relatedChannels.map((ch) => (
