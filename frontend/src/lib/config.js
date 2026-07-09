@@ -28,7 +28,15 @@ export const BACKEND_URL = (() => {
 
 function apiUrl(path) {
   if (path.startsWith('http')) return path;
-  return path.startsWith('/') ? path : `/${path}`;
+  const rel = path.startsWith('/') ? path : `/${path}`;
+  // In dev the frontend (5173) and backend (4000) run on different ports and
+  // there is no Vite proxy, so prefix the backend origin when it differs.
+  // In production (SERVE_FRONTEND=1) BACKEND_URL equals the page origin, so
+  // this keeps behaving like a same-origin relative call.
+  if (typeof window !== 'undefined' && BACKEND_URL && BACKEND_URL !== window.location.origin) {
+    return `${BACKEND_URL}${rel}`;
+  }
+  return rel;
 }
 
 /** GET helper returning parsed JSON. `headers` lets callers add auth. */

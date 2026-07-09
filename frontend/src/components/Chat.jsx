@@ -1,10 +1,12 @@
 // ---------------------------------------------------------------------------
 // Chat — Enhanced live public chat with emoji picker, typing indicator,
-// message reactions, GIF support, and slide-in animations.
+// message reactions (one per person), replies, real GIF search (via the
+// backend /api/gifs proxy), and slide-in animations.
 // ---------------------------------------------------------------------------
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { socket } from '../lib/socket.js';
+import { apiGet } from '../lib/config.js';
 import { formatTime, formatChatText, getStoredUsername, setStoredUsername } from '../lib/utils.js';
 import { getProfile, getGuestName, getEffectiveName, onProfileChange, saveProfile } from '../lib/profile.js';
 import UserAvatar from './UserAvatar.jsx';
@@ -12,15 +14,6 @@ import AiBotBadge from './AiBotBadge.jsx';
 
 const QUICK_EMOJIS = ['👏', '🔥', '⚽', '🏀', '🎉', '😂', '❤️', '💪'];
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '😮'];
-
-// Tenor GIF search (free API key for demo)
-const TENOR_KEY = 'AIzaSyAyimkuYQYF_FXVALexPzkcsvZnUpdated';
-const SPORTS_GIFS = [
-  { id: 'g1', url: 'https://media.tenor.com/Iqfq1Ld3XZAAAAAC/goal-soccer.gif', preview: 'https://media.tenor.com/Iqfq1Ld3XZAAAAAM/goal-soccer.gif', title: 'Goal!' },
-  { id: 'g2', url: 'https://media.tenor.com/9Vc5dGT8HOEAAAAC/football-touchdown.gif', preview: 'https://media.tenor.com/9Vc5dGT8HOEAAAAM/football-touchdown.gif', title: 'Touchdown' },
-  { id: 'g3', url: 'https://media.tenor.com/5qhZBqhGnxIAAAAC/celebration-dance.gif', preview: 'https://media.tenor.com/5qhZBqhGnxIAAAAM/celebration-dance.gif', title: 'Celebrate' },
-  { id: 'g4', url: 'https://media.tenor.com/y2JXkY1pXkwAAAAC/clapping-applause.gif', preview: 'https://media.tenor.com/y2JXkY1pXkwAAAAM/clapping-applause.gif', title: 'Clap' },
-];
 
 // Simple emoji categories for the picker
 const EMOJI_CATEGORIES = {
@@ -38,17 +31,24 @@ export default function Chat() {
   const [onlineCount, setOnlineCount] = useState(0);
   const [myUsername, setMyUsername] = useState('');
   const [myColor, setMyColor] = useState('#22c55e');
-  const [reactions, setReactions] = useState({});
   const [openReactionFor, setOpenReactionFor] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiCategory, setEmojiCategory] = useState('Sports');
   const [showGifPicker, setShowGifPicker] = useState(false);
+  const [gifQuery, setGifQuery] = useState('');
+  const [gifs, setGifs] = useState([]);
+  const [gifLoading, setGifLoading] = useState(false);
+  const [gifError, setGifError] = useState('');
+  const [replyTo, setReplyTo] = useState(null); // { id, username, color, text, isAI }
   const [typingUsers, setTypingUsers] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
   const listRef = useRef(null);
   const typingTimerRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const gifPickerRef = useRef(null);
+  const gifSearchTimerRef = useRef(null);
+  const inputRef = useRef(null);
+  const messageRefs = useRef({});
 
   // Auto-join if a profile name or stored username exists
   useEffect(() => {
@@ -85,14 +85,17 @@ export default function Chat() {
     function onCount(count) {
       setOnlineCount(typeof count === 'number' ? count : count?.count || 0);
     }
-    function onReaction({ messageId, emoji, username }) {
-      setReactions((prev) => {
-        const msgReactions = { ...(prev[messageId] || {}) };
-        msgReactions[emoji] = (msgReactions[emoji] || 0) + 1;
-        return { ...prev, [messageId]: msgReactions };
-      });
+    // Server sends the authoritative reactions map: { emoji: [usernames] }
+    function onReactionUpdate({ messageId, reactions }) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, reactions } : m))
+      );
     }
-    function onTyping({ username }) {
+    function onTyping({ username, isTyping: typing }) {
+      if (typing === false) {
+        setTypingUsers(prev => prev.filter(u => u !== username));
+        return;
+      }
       setTypingUsers(prev => {
         if (prev.includes(username)) return prev;
         return [...prev, username];
@@ -109,7 +112,7 @@ export default function Chat() {
     socket.on('chat:history', onHistory);
     socket.on('chat:message', onMessage);
     socket.on('chat:count', onCount);
-    socket.on('chat:reaction', onReaction);
+    socket.on('chat:reaction-update', onReactionUpdate);
     socket.on('chat:typing', onTyping);
     socket.on('chat:error', onError);
 
@@ -118,7 +121,7 @@ export default function Chat() {
       socket.off('chat:history', onHistory);
       socket.off('chat:message', onMessage);
       socket.off('chat:count', onCount);
-      socket.off('chat:reaction', onReaction);
+      socket.off('chat:reaction-update', onReactionUpdate);
       socket.off('chat:typing', onTyping);
       socket.off('chat:error', onError);
     };
@@ -145,6 +148,33 @@ export default function Chat() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // ----- GIF search (through the backend proxy) -----------------------------
+  const fetchGifs = useCallback(async (query) => {
+    setGifLoading(true);
+    setGifError('');
+    try {
+      const q = query ? `?q=${encodeURIComponent(query)}&limit=16` : '?limit=16';
+      const data = await apiGet(`/api/gifs${q}`);
+      setGifs(data.gifs || []);
+      if (!data.gifs?.length) setGifError('No GIFs found. Try another search.');
+    } catch {
+      setGifError('Could not load GIFs. Try again.');
+      setGifs([]);
+    } finally {
+      setGifLoading(false);
+    }
+  }, []);
+
+  // Load trending GIFs when the picker opens; debounce searches.
+  useEffect(() => {
+    if (!showGifPicker) return;
+    clearTimeout(gifSearchTimerRef.current);
+    gifSearchTimerRef.current = setTimeout(() => {
+      fetchGifs(gifQuery.trim());
+    }, gifQuery ? 400 : 0);
+    return () => clearTimeout(gifSearchTimerRef.current);
+  }, [showGifPicker, gifQuery, fetchGifs]);
+
   function handleJoin(e) {
     e.preventDefault();
     const typed = nameInput.trim();
@@ -161,8 +191,12 @@ export default function Chat() {
   function handleSend(e) {
     e.preventDefault();
     if (!draft.trim()) return;
-    socket.emit('chat:message', { text: draft.trim() });
+    socket.emit('chat:message', {
+      text: draft.trim(),
+      replyTo: replyTo?.id || undefined,
+    });
     setDraft('');
+    setReplyTo(null);
     setIsTyping(false);
   }
 
@@ -171,11 +205,31 @@ export default function Chat() {
     setOpenReactionFor(null);
   }
 
+  function startReply(m) {
+    setReplyTo({
+      id: m.id,
+      username: m.username,
+      color: m.color,
+      isAI: !!m.isAI,
+      text: m.gif ? '[GIF]' : (m.text || '').slice(0, 120),
+    });
+    inputRef.current?.focus();
+  }
+
+  function scrollToMessage(id) {
+    const el = messageRefs.current[id];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('ring-1', 'ring-[var(--accent)]');
+      setTimeout(() => el.classList.remove('ring-1', 'ring-[var(--accent)]'), 1200);
+    }
+  }
+
   function handleDraftChange(e) {
     setDraft(e.target.value);
     if (!isTyping) {
       setIsTyping(true);
-      socket.emit('chat:typing', { username: myUsername });
+      socket.emit('chat:typing', { isTyping: true });
     }
     clearTimeout(typingTimerRef.current);
     typingTimerRef.current = setTimeout(() => setIsTyping(false), 2000);
@@ -187,7 +241,12 @@ export default function Chat() {
   }
 
   function sendGif(gif) {
-    socket.emit('chat:message', { text: `[GIF] ${gif.url}` });
+    socket.emit('chat:message', {
+      gif: gif.url,
+      text: '',
+      replyTo: replyTo?.id || undefined,
+    });
+    setReplyTo(null);
     setShowGifPicker(false);
   }
 
@@ -269,14 +328,15 @@ export default function Chat() {
                 </motion.div>
               );
             }
-            const msgReactions = reactions[m.id] || {};
-            // Check if message is a GIF
-            const isGif = m.text && m.text.startsWith('[GIF] ');
-            const gifUrl = isGif ? m.text.replace('[GIF] ', '') : null;
+            const msgReactions = m.reactions || {};
+            // GIF messages: new format uses m.gif; keep backward compat with "[GIF] url" text
+            const legacyGif = m.text && m.text.startsWith('[GIF] ') ? m.text.replace('[GIF] ', '') : null;
+            const gifUrl = m.gif || legacyGif;
 
             return (
               <motion.div
                 key={m.id}
+                ref={(el) => { messageRefs.current[m.id] = el; }}
                 initial={{ opacity: 0, y: 12, x: -8 }}
                 animate={{ opacity: 1, y: 0, x: 0 }}
                 transition={{ duration: 0.25 }}
@@ -290,11 +350,32 @@ export default function Chat() {
                   {m.isAI && <AiBotBadge />}
                   <span className="text-[10px] text-[var(--text-muted)] opacity-0 transition-opacity group-hover:opacity-100">{formatTime(m.ts)}</span>
                 </div>
-                {isGif ? (
+
+                {/* Quoted reply snippet */}
+                {m.replyTo && (
+                  <button
+                    onClick={() => scrollToMessage(m.replyTo.id)}
+                    className="mt-1 ml-8 flex w-fit max-w-[85%] items-start gap-1.5 rounded-lg border-l-2 bg-[var(--bg-tertiary)]/70 px-2 py-1 text-left transition-colors hover:bg-[var(--bg-tertiary)]"
+                    style={{ borderLeftColor: m.replyTo.color || 'var(--accent)' }}
+                    title="Jump to original message"
+                  >
+                    <div className="min-w-0">
+                      <span className="block text-[10px] font-bold" style={{ color: m.replyTo.color || 'var(--accent)' }}>
+                        {m.replyTo.username}
+                      </span>
+                      <span className="block truncate text-[10px] text-[var(--text-muted)]">
+                        {m.replyTo.text}
+                      </span>
+                    </div>
+                  </button>
+                )}
+
+                {gifUrl ? (
                   <img
                     src={gifUrl}
                     alt="GIF"
-                    className="mt-1 ml-8 max-w-[180px] rounded-xl ring-1 ring-[var(--border-primary)]"
+                    loading="lazy"
+                    className="mt-1 ml-8 max-w-[200px] rounded-xl ring-1 ring-[var(--border-primary)]"
                     onError={e => { e.target.style.display = 'none'; }}
                   />
                 ) : (
@@ -308,31 +389,51 @@ export default function Chat() {
                   />
                 )}
 
-                {/* Reaction counts */}
+                {/* Reaction counts — server-authoritative { emoji: [usernames] }.
+                    Clicking toggles/switches your single reaction. */}
                 {Object.keys(msgReactions).length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {Object.entries(msgReactions).map(([emoji, n]) => (
-                      <button
-                        key={emoji}
-                        onClick={() => sendReaction(m.id, emoji)}
-                        className="rounded-full bg-ink-600/50 px-2 py-0.5 text-[11px] ring-1 ring-ink-500/30 hover:bg-ink-500/50 transition-colors"
-                      >
-                        {emoji} {n}
-                      </button>
-                    ))}
+                  <div className="mt-1.5 ml-8 flex flex-wrap gap-1">
+                    {Object.entries(msgReactions).map(([emoji, users]) => {
+                      const mine = Array.isArray(users) && users.includes(myUsername);
+                      return (
+                        <button
+                          key={emoji}
+                          onClick={() => sendReaction(m.id, emoji)}
+                          title={Array.isArray(users) ? users.join(', ') : ''}
+                          className={`rounded-full px-2 py-0.5 text-[11px] ring-1 transition-colors ${
+                            mine
+                              ? 'bg-[var(--accent-muted)] ring-[var(--accent)]/50 text-[var(--accent)] font-semibold'
+                              : 'bg-ink-600/50 ring-ink-500/30 hover:bg-ink-500/50'
+                          }`}
+                        >
+                          {emoji} {Array.isArray(users) ? users.length : users}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
-                {/* Hover react button */}
-                <button
-                  onClick={() => setOpenReactionFor(openReactionFor === m.id ? null : m.id)}
-                  className="absolute right-0 top-0 hidden rounded-lg bg-ink-600 px-1.5 py-0.5 text-xs text-slate-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 hover:bg-ink-500"
-                  title="React"
-                >
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </button>
+                {/* Hover actions: reply + react */}
+                <div className="absolute right-0 top-0 hidden gap-1 group-hover:flex">
+                  <button
+                    onClick={() => startReply(m)}
+                    className="flex h-6 w-6 items-center justify-center rounded-full bg-ink-600 text-slate-300 ring-1 ring-ink-500/40 transition-colors hover:bg-ink-500 hover:text-white"
+                    title="Reply"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setOpenReactionFor(openReactionFor === m.id ? null : m.id)}
+                    className="flex h-6 w-6 items-center justify-center rounded-full bg-ink-600 text-slate-300 ring-1 ring-ink-500/40 transition-colors hover:bg-ink-500 hover:text-white"
+                    title="React"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </button>
+                </div>
 
                 {/* Reaction picker */}
                 <AnimatePresence>
@@ -435,7 +536,7 @@ export default function Chat() {
         )}
       </AnimatePresence>
 
-      {/* GIF Picker */}
+      {/* GIF Picker — searches real GIFs through the backend proxy */}
       <AnimatePresence>
         {showGifPicker && (
           <motion.div
@@ -446,20 +547,72 @@ export default function Chat() {
             transition={{ duration: 0.2 }}
             className="absolute bottom-16 left-2 right-2 z-20 rounded-xl border border-ink-500/50 bg-ink-800 shadow-xl p-3"
           >
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">Sports GIFs</p>
-            <div className="grid grid-cols-2 gap-2">
-              {SPORTS_GIFS.map(gif => (
-                <button
-                  key={gif.id}
-                  onClick={() => sendGif(gif)}
-                  className="relative overflow-hidden rounded-lg bg-ink-700 aspect-video hover:ring-2 hover:ring-accent transition-all"
-                >
-                  <div className="flex items-center justify-center h-full text-2xl">{gif.title}</div>
-                  <span className="absolute bottom-1 left-1 text-[9px] font-bold text-white bg-black/60 px-1 rounded">{gif.title}</span>
-                </button>
-              ))}
+            <input
+              value={gifQuery}
+              onChange={(e) => setGifQuery(e.target.value)}
+              placeholder="Search GIFs… (goal, celebration, wow)"
+              className="mb-2 w-full rounded-lg border border-ink-600/60 bg-ink-700 px-3 py-2 text-xs text-white outline-none placeholder:text-slate-500 focus:border-accent"
+              autoFocus
+            />
+            {gifLoading && (
+              <div className="flex h-32 items-center justify-center">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+              </div>
+            )}
+            {!gifLoading && gifError && (
+              <p className="py-8 text-center text-[11px] text-slate-500">{gifError}</p>
+            )}
+            {!gifLoading && !gifError && (
+              <div className="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto scrollbar-thin">
+                {gifs.map(gif => (
+                  <button
+                    key={gif.id}
+                    onClick={() => sendGif(gif)}
+                    className="relative overflow-hidden rounded-lg bg-ink-700 aspect-video hover:ring-2 hover:ring-accent transition-all"
+                    title={gif.title}
+                  >
+                    <img
+                      src={gif.preview}
+                      alt={gif.title}
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-[9px] text-slate-600 mt-2 text-center">Powered by GIPHY</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Reply banner */}
+      <AnimatePresence>
+        {replyTo && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            className="flex items-center gap-2 border-t border-[var(--border-primary)] bg-[var(--bg-tertiary)]/60 px-3 py-1.5"
+          >
+            <svg className="h-3.5 w-3.5 shrink-0 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
+            <div className="min-w-0 flex-1">
+              <span className="block text-[10px] font-bold" style={{ color: replyTo.color || 'var(--accent)' }}>
+                Replying to {replyTo.username}
+              </span>
+              <span className="block truncate text-[10px] text-[var(--text-muted)]">{replyTo.text}</span>
             </div>
-            <p className="text-[9px] text-slate-600 mt-2 text-center">Powered by Tenor</p>
+            <button
+              onClick={() => setReplyTo(null)}
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]"
+              title="Cancel reply"
+            >
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -489,6 +642,7 @@ export default function Chat() {
           GIF
         </button>
         <input
+          ref={inputRef}
           value={draft}
           onChange={handleDraftChange}
           placeholder="Say something… (type @bgc for AI analysis)"

@@ -17,6 +17,7 @@ import StreamOfflineFallback from '../components/StreamOfflineFallback.jsx';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
 
 const Chat = lazy(() => import('../components/Chat.jsx'));
+const AiChat = lazy(() => import('../components/AiChat.jsx'));
 const WatchPartyRoom = lazy(() => import('../components/WatchPartyRoom.jsx'));
 
 function PanelLoader() {
@@ -47,6 +48,13 @@ function PanelTabs({ active, onChange }) {
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
+      ),
+    },
+    {
+      id: 'ai',
+      label: 'BGC AI',
+      icon: (
+        <img src="/bgc-ai-logo.png" alt="" className="h-4 w-4 rounded-full" />
       ),
     },
   ];
@@ -796,6 +804,14 @@ export default function WatchPage() {
                   </Suspense>
                 </div>
               </div>
+              {/* AI chatroom panel — hidden entirely in theater mode */}
+              <div className={activePanel === 'ai' && !theater ? '' : 'hidden'}>
+                <div className="h-[46vh] min-h-[320px]">
+                  <Suspense fallback={<PanelLoader />}>
+                    <AiChat />
+                  </Suspense>
+                </div>
+              </div>
             </div>
           </div>
           )}
@@ -858,6 +874,12 @@ export default function WatchPage() {
                 <div className={`flex-1 overflow-hidden ${activePanel === 'chat' && !theater ? '' : 'hidden'}`}>
                   <Suspense fallback={<PanelLoader />}>
                     <Chat />
+                  </Suspense>
+                </div>
+                {/* BGC AI chatroom tab — hidden entirely in theater mode */}
+                <div className={`flex-1 overflow-hidden ${activePanel === 'ai' && !theater ? '' : 'hidden'}`}>
+                  <Suspense fallback={<PanelLoader />}>
+                    <AiChat />
                   </Suspense>
                 </div>
               </div>

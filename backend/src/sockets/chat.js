@@ -5,16 +5,29 @@
 // the client sends a username (or we auto-generate one) and a color.
 //
 // Events (client -> server):
-//   chat:join     { username }                 -> assign identity, send history
-//   chat:message  { text }                     -> broadcast a message
-//   chat:reaction { messageId, emoji }         -> broadcast a reaction
+//   chat:join     { username, avatar }          -> assign identity, send history
+//   chat:message  { text, gif?, replyTo? }      -> broadcast a message
+//   chat:reaction { messageId, emoji }          -> toggle a reaction (1/user/msg)
 //
 // Events (server -> client):
-//   chat:welcome  { username, color }
-//   chat:history  [messages]
-//   chat:message  message
-//   chat:reaction { messageId, emoji, username }
-//   chat:count    number (online users)
+//   chat:welcome          { username, color, avatar }
+//   chat:history          [messages]
+//   chat:message          message
+//   chat:reaction-update  { messageId, reactions }  reactions = { emoji: [users] }
+//   chat:count            number (online users)
+//
+// Message shape:
+//   { id, username, color, avatar, text, gif?, ts, reactions, replyTo? }
+//   replyTo (optional) = { id, username, color, isAI, text } snippet of the
+//   message being replied to.
+//
+// Reactions: one reaction per user per message. Clicking the same emoji
+// again removes it; clicking a different emoji switches to it. The server is
+// the source of truth and broadcasts the full updated reactions map.
+//
+// GIFs: the client sends `gif` — a direct GIF URL selected from the built-in
+// GIF picker (served through /api/gifs). Only known GIF CDN hosts pass
+// validation, so arbitrary URLs cannot be injected.
 //
 // AI Integration:
 //   When a message contains "@bgc", the BGC AI agent processes the query
@@ -34,12 +47,40 @@ const PUBLIC_CHANNEL = 'public-chat';
 const HISTORY_LIMIT = 100;
 const MAX_MESSAGE_LEN = 500;
 
+// Allowed GIF hosts — matches what the /api/gifs proxy returns.
+const GIF_HOST_RE = /^https:\/\/([a-z0-9-]+\.)?(giphy\.com|tenor\.com|gstatic\.com)\//i;
+
 // In-memory ring buffer of recent messages (shared across connections).
 const history = [];
 
 function pushHistory(msg) {
   history.push(msg);
   if (history.length > HISTORY_LIMIT) history.shift();
+}
+
+function findMessage(messageId) {
+  return history.find((m) => m.id === messageId);
+}
+
+/** Validate a GIF URL from the picker (must be a known GIF CDN). */
+export function sanitizeGifUrl(raw) {
+  const url = String(raw || '').trim().slice(0, 600);
+  if (!url) return '';
+  return GIF_HOST_RE.test(url) ? url : '';
+}
+
+/** Build the reply snippet stored on a message that replies to another. */
+function buildReplySnippet(replyToId) {
+  if (!replyToId) return null;
+  const original = findMessage(String(replyToId));
+  if (!original || original.system) return null;
+  return {
+    id: original.id,
+    username: original.username,
+    color: original.color || '',
+    isAI: !!original.isAI,
+    text: original.gif ? '[GIF]' : String(original.text || '').slice(0, 120),
+  };
 }
 
 // Very small per-socket rate limiter to discourage spam.
@@ -132,7 +173,8 @@ export function registerChatHandlers(io, socket) {
       .replace(/[<>]/g, '')
       .trim()
       .slice(0, MAX_MESSAGE_LEN);
-    if (!text) return;
+    const gif = sanitizeGifUrl(payload.gif);
+    if (!text && !gif) return;
 
     const msg = {
       id: nanoid(),
@@ -142,12 +184,15 @@ export function registerChatHandlers(io, socket) {
       text,
       ts: Date.now(),
       reactions: {},
+      replyTo: buildReplySnippet(payload.replyTo),
     };
+    if (gif) msg.gif = gif;
+
     pushHistory(msg);
     io.to(PUBLIC_CHANNEL).emit('chat:message', msg);
 
     // --- AI Integration: Check for @bgc mention and respond ---
-    if (aiHandler) {
+    if (aiHandler && text) {
       // Process asynchronously — don't block the chat flow
       aiHandler(msg).catch((err) => {
         console.error('[AI-Chat] Unhandled error:', err);
@@ -155,17 +200,39 @@ export function registerChatHandlers(io, socket) {
     }
   });
 
+  // One reaction per user per message: clicking the same emoji removes it,
+  // clicking a different emoji switches to it. The server stores usernames
+  // per emoji and broadcasts the authoritative reactions map.
   socket.on('chat:reaction', (payload = {}) => {
     const { username } = socket.data.chat;
     if (!username) return;
-    const { messageId, emoji } = payload;
+    const messageId = String(payload.messageId || '');
+    const emoji = String(payload.emoji || '').slice(0, 8);
     if (!messageId || !emoji) return;
 
-    const safeEmoji = String(emoji).slice(0, 8);
-    io.to(PUBLIC_CHANNEL).emit('chat:reaction', {
+    const msg = findMessage(messageId);
+    if (!msg || msg.system) return;
+    if (!msg.reactions) msg.reactions = {};
+
+    // Remove any existing reaction from this user across all emojis.
+    let removedSame = false;
+    for (const [em, users] of Object.entries(msg.reactions)) {
+      const idx = users.indexOf(username);
+      if (idx !== -1) {
+        users.splice(idx, 1);
+        if (em === emoji) removedSame = true;
+        if (users.length === 0) delete msg.reactions[em];
+      }
+    }
+    // Add the new reaction unless the user just un-reacted the same emoji.
+    if (!removedSame) {
+      if (!msg.reactions[emoji]) msg.reactions[emoji] = [];
+      msg.reactions[emoji].push(username);
+    }
+
+    io.to(PUBLIC_CHANNEL).emit('chat:reaction-update', {
       messageId,
-      emoji: safeEmoji,
-      username,
+      reactions: msg.reactions,
     });
   });
 

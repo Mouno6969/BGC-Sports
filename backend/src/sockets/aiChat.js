@@ -20,7 +20,7 @@ import { isBgcMention, processQuery } from '../ai/index.js';
 const AI_BOT = {
   username: 'BGC AI',
   color: '#f59e0b', // Amber/gold color — matches World Cup theme
-  avatar: '', // Will use the default "B" avatar from UserAvatar component
+  avatar: '/bgc-ai-logo.png', // BGC AI logo served from frontend/public
   isBot: true,
 };
 

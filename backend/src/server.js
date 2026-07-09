@@ -33,10 +33,12 @@ import toffeeCdnRoute from './routes/toffeeCdn.js';
 import hlsProxyRoute from './routes/hlsProxy.js';
 import scoresRoute from './routes/scores.js';
 import aiRoute from './routes/ai.js';
+import gifsRoute from './routes/gifs.js';
 import { registerChatHandlers } from './sockets/chat.js';
 import { registerRoomHandlers } from './sockets/room.js';
 import { registerCallHandlers } from './sockets/call.js';
 import { registerPrivateRoomHandlers } from './sockets/privateRoom.js';
+import { registerAiRoomHandlers } from './sockets/aiRoom.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -73,6 +75,7 @@ app.use('/api/toffee-cdn', toffeeCdnRoute);
 app.use('/api/hls-proxy', hlsProxyRoute);
 app.use('/api/scores', scoresRoute);
 app.use('/api/ai', aiRoute);
+app.use('/api/gifs', gifsRoute);
 
 if (serveFrontend) {
   app.use(express.static(frontendDist));
@@ -110,6 +113,7 @@ io.on('connection', (socket) => {
   registerRoomHandlers(io, socket);
   registerCallHandlers(io, socket);
   registerPrivateRoomHandlers(io, socket);
+  registerAiRoomHandlers(io, socket);
 
   socket.on('disconnect', (reason) => {
     console.log(`[socket] disconnected: ${socket.id} (${reason})`);
