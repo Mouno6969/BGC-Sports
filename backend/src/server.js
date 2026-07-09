@@ -5,15 +5,21 @@
 // watch-party rooms + legacy WebRTC call signaling).
 // ---------------------------------------------------------------------------
 
-import 'dotenv/config';
-import http from 'http';
+import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+const __dirnameBoot = path.dirname(fileURLToPath(import.meta.url));
+
+// Load main .env first, then .env.ai for AI provider keys
+dotenv.config({ path: path.resolve(__dirnameBoot, '../.env') });
+dotenv.config({ path: path.resolve(__dirnameBoot, '../.env.ai') });
+import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import { Server as SocketIOServer } from 'socket.io';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = __dirnameBoot;
 const serveFrontend = process.env.SERVE_FRONTEND === '1';
 const frontendDist = path.resolve(__dirname, '../../frontend/dist');
 

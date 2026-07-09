@@ -26,7 +26,7 @@ const PROVIDERS = {
   cerebras: {
     endpoint: 'https://api.cerebras.ai/v1/chat/completions',
     envKey: 'CEREBRAS_API_KEY',
-    model: 'llama-3.3-70b',
+    model: 'gpt-oss-120b',
     name: 'Cerebras',
   },
   gemini: {
@@ -75,12 +75,12 @@ function getProviderOrder() {
   }
   return [
     'groq',
+    'openrouter',
+    'mistral',
     'cerebras',
     'gemini',
     'nvidia_deepseek',
     'nvidia_llama',
-    'openrouter',
-    'mistral',
     'huggingface',
   ];
 }
