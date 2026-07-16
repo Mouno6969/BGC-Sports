@@ -553,6 +553,27 @@ body {
   color: var(--brand-purple-light);
 }
 
+/* Stadium Signal mark only — sits beside existing BGC SPORTS wordmark */
+.layout-brand {
+  min-width: 0;
+}
+
+.layout-brand .brand-logo__mark {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  color: var(--accent);
+  filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.22));
+}
+
+@media (min-width: 640px) {
+  .layout-brand .brand-logo__mark {
+    width: 2.15rem;
+    height: 2.15rem;
+  }
+}
+
 /* Homepage shell overrides */
 .layout--homepage {
   background: transparent !important;

@@ -11,6 +11,7 @@ import InstallPwaPrompt from './InstallPwaPrompt.jsx';
 import ToastContainer, { showToast } from './Toast.jsx';
 import ProfileSettingsModal from './ProfileSettingsModal.jsx';
 import UserAvatar from './UserAvatar.jsx';
+import { BrandMark } from './BrandLogo.jsx';
 import { getProfile, getEffectiveName, onProfileChange } from '../lib/profile.js';
 import JsonLd from './JsonLd.jsx';
 import { getSiteOrigin } from '../lib/sportsEventSchema.js';
@@ -236,7 +237,10 @@ export default function Layout() {
         }`}
       >
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 lg:px-6">
-          <Link to="/" viewTransition className="flex min-h-[44px] items-center gap-2" aria-label="BGC Sports Home">
+          <Link to="/" viewTransition className="layout-brand flex min-h-[44px] items-center gap-2" aria-label="BGC Sports Home">
+            <span className="brand-logo__mark" aria-hidden="true">
+              <BrandMark className="h-full w-full" />
+            </span>
             <span className="logo-brand type-display text-xl italic tracking-tight">
               BGC <span>SPORTS</span>
             </span>
