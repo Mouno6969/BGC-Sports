@@ -11,13 +11,13 @@ import { armChannelMediaTransition } from '../lib/viewTransitions.js';
 export default function WorldCupMobileFab() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const tab = searchParams.get('tab') || 'predict';
+  const tab = searchParams.get('tab') || 'worldcup';
   const [open, setOpen] = useState(false);
   const [channels, setChannels] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const isHome = location.pathname === '/';
-  const hideFab = !isHome || tab !== 'channels';
+  const hideFab = !isHome || tab === 'worldcup';
 
   useEffect(() => {
     if (!open) return;
