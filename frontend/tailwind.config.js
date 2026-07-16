@@ -17,10 +17,10 @@ export default {
           300: '#3D5580',
         },
         accent: {
-          DEFAULT: '#10B981',
-          light: '#34D399',
-          dark: '#059669',
-          muted: '#10B98133',
+          DEFAULT: '#39F0AE',
+          light: '#73F8CB',
+          dark: '#16C98D',
+          muted: '#39F0AE21',
         },
         live: '#EF4444',
         success: '#10B981',
@@ -28,7 +28,7 @@ export default {
         info: '#3B82F6',
       },
       fontFamily: {
-        display: ['Montserrat', 'system-ui', 'sans-serif'],
+        display: ['Barlow Condensed', 'Arial Narrow', 'system-ui', 'sans-serif'],
         sans: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },

@@ -46,28 +46,28 @@ function TeamBadge({ badge, name }) {
 
 function ScoreStepper({ value, onChange, disabled, label }) {
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="score-stepper flex flex-col items-center gap-1">
       <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
         {label}
       </span>
-      <div className="flex items-center gap-1.5">
+      <div className="score-stepper__controls flex items-center gap-1.5">
         <button
           type="button"
           disabled={disabled || value <= 0}
           onClick={() => onChange(Math.max(0, value - 1))}
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--bg-tertiary)] text-lg font-bold text-[var(--text-primary)] ring-1 ring-[var(--border-primary)] disabled:opacity-40 active:scale-95"
+          className="score-stepper__button flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--bg-tertiary)] text-lg font-bold text-[var(--text-primary)] ring-1 ring-[var(--border-primary)] disabled:opacity-40 active:scale-95"
           aria-label="Decrease"
         >
           −
         </button>
-        <span className="min-w-[2rem] text-center text-2xl font-extrabold tabular-nums text-[var(--text-primary)]">
+        <span className="score-stepper__value min-w-[2rem] text-center text-2xl font-extrabold tabular-nums text-[var(--text-primary)]">
           {value}
         </span>
         <button
           type="button"
           disabled={disabled || value >= 15}
           onClick={() => onChange(Math.min(15, value + 1))}
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--bg-tertiary)] text-lg font-bold text-[var(--text-primary)] ring-1 ring-[var(--border-primary)] disabled:opacity-40 active:scale-95"
+          className="score-stepper__button flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--bg-tertiary)] text-lg font-bold text-[var(--text-primary)] ring-1 ring-[var(--border-primary)] disabled:opacity-40 active:scale-95"
           aria-label="Increase"
         >
           +
@@ -136,7 +136,7 @@ function PredictMatchCard({ match, existing, onSaved, scoring }) {
       viewport={{ once: true }}
       data-match-id={match.id}
       data-match-event={eventId || undefined}
-      className={`rounded-xl border p-4 transition-shadow ${
+      className={`prediction-match-card rounded-xl border p-4 transition-shadow ${
         settled
           ? pts > 0
             ? 'border-emerald-500/30 bg-emerald-500/5'
@@ -224,7 +224,7 @@ function PredictMatchCard({ match, existing, onSaved, scoring }) {
           type="button"
           disabled={saving}
           onClick={save}
-          className="mt-4 w-full rounded-lg bg-accent py-2.5 text-sm font-bold text-white transition-all hover:bg-accent-light active:scale-[0.98] disabled:opacity-60"
+          className="prediction-match-card__submit mt-4 w-full rounded-lg bg-accent py-2.5 text-sm font-bold text-white transition-all hover:bg-accent-light active:scale-[0.98] disabled:opacity-60"
         >
           {saving ? 'Saving…' : existing ? 'Update prediction' : 'Submit prediction'}
         </button>
@@ -357,26 +357,27 @@ export default function PredictionLeaderboard({ pitch = false }) {
   const textPrimary = pitch ? 'text-white' : 'text-[var(--text-primary)]';
 
   return (
-    <section className="space-y-4">
+    <section className="prediction-desk space-y-4">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="prediction-desk__header flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 ring-1 ring-amber-500/30">
-            <span className="text-lg">🎯</span>
+          <div className="prediction-desk__mark" aria-hidden="true">
+            <span className="signal-target" />
           </div>
           <div>
-            <h2 className={`type-h2 flex items-center gap-2 flex-wrap ${textPrimary}`}>
-              Prediction League
+            <p className="prediction-desk__eyebrow">BGC prediction league</p>
+            <h2 className={`prediction-desk__title type-h2 flex items-center gap-2 flex-wrap ${textPrimary}`}>
+              Score desk
             </h2>
-            <p className={`text-[10px] ${textMuted}`}>
-              Exact score {scoring.exact} pts · Correct result {scoring.correctResult} pts
+            <p className={`prediction-desk__rules text-[10px] ${textMuted}`}>
+              Exact {scoring.exact} · Result {scoring.correctResult} · Lock before kickoff
               {totalPlayers > 0 ? ` · ${totalPlayers} players` : ''}
             </p>
           </div>
         </div>
 
         {me && (
-          <div className="rounded-xl border border-accent/25 bg-accent/10 px-3 py-2 text-right">
+          <div className="prediction-desk__rank rounded-xl border border-accent/25 bg-accent/10 px-3 py-2 text-right">
             <p className="text-[10px] font-bold uppercase text-accent">Your rank</p>
             <p className={`text-lg font-extrabold ${textPrimary}`}>
               {me.rank ? `#${me.rank}` : '—'}{' '}
@@ -391,7 +392,7 @@ export default function PredictionLeaderboard({ pitch = false }) {
 
       {/* Identity hint */}
       <div
-        className={`rounded-xl border border-[var(--border-primary)] px-3 py-2 text-[11px] ${
+        className={`prediction-desk__identity rounded-xl border border-[var(--border-primary)] px-3 py-2 text-[11px] ${
           pitch ? 'bg-black/30 text-slate-300' : 'bg-[var(--bg-card)] text-[var(--text-muted)]'
         }`}
       >
@@ -407,21 +408,23 @@ export default function PredictionLeaderboard({ pitch = false }) {
       </div>
 
       {/* Sub tabs */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="prediction-desk__tabs flex gap-2 flex-wrap" role="tablist" aria-label="Prediction views">
         {[
-          { id: 'predict', label: '⚽ Predict' },
-          { id: 'board', label: '🏆 Leaderboard' },
-          { id: 'history', label: '📋 My results' },
+          { id: 'predict', label: 'Predict' },
+          { id: 'board', label: 'Leaderboard' },
+          { id: 'history', label: 'My results' },
         ].map((t) => (
           <button
             key={t.id}
             type="button"
             data-haptic="selection"
             data-haptic-tab="1"
+            role="tab"
+            aria-selected={subTab === t.id}
             onClick={() => setSubTab(t.id)}
-            className={`rounded-full px-3 py-1 text-[10px] font-bold transition-all ${
+            className={`prediction-desk__tab rounded-full px-3 py-1 text-[10px] font-bold transition-all ${
               subTab === t.id
-                ? 'bg-accent/15 text-accent ring-1 ring-accent/30'
+                ? 'is-active bg-accent/15 text-accent ring-1 ring-accent/30'
                 : `${textMuted} hover:text-[var(--text-secondary)]`
             }`}
           >

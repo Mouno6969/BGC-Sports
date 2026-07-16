@@ -11,6 +11,7 @@ import InstallPwaPrompt from './InstallPwaPrompt.jsx';
 import ToastContainer, { showToast } from './Toast.jsx';
 import ProfileSettingsModal from './ProfileSettingsModal.jsx';
 import UserAvatar from './UserAvatar.jsx';
+import BrandLogo from './BrandLogo.jsx';
 import { getProfile, getEffectiveName, onProfileChange } from '../lib/profile.js';
 import JsonLd from './JsonLd.jsx';
 import { getSiteOrigin } from '../lib/sportsEventSchema.js';
@@ -98,7 +99,7 @@ export default function Layout() {
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const tab = searchParams.get('tab') || 'worldcup';
+  const tab = searchParams.get('tab') || 'predict';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
@@ -222,7 +223,7 @@ export default function Layout() {
   };
 
   return (
-    <div className={`flex min-h-screen flex-col bg-[var(--bg-primary)] transition-colors duration-200 ${isScenePage ? 'layout--homepage' : ''}${isScenePage && isScrolling ? ' is-scrolling' : ''}`}>
+    <div className={`app-shell flex min-h-screen flex-col bg-[var(--bg-primary)] transition-colors duration-200 ${isScenePage ? 'layout--homepage' : ''}${isScenePage && isScrolling ? ' is-scrolling' : ''}`}>
       <JsonLd id="site-organization" data={siteJsonLd} />
       <div className="layout-ticker">
         <LiveScoreTicker />
@@ -235,14 +236,12 @@ export default function Layout() {
             : 'border-[var(--border-primary)] bg-[var(--bg-secondary)]'
         }`}
       >
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 lg:px-6">
-          <Link to="/" viewTransition className="flex min-h-[44px] items-center gap-2" aria-label="BGC Sports Home">
-            <span className="logo-brand type-display text-xl italic tracking-tight">
-              BGC <span>SPORTS</span>
-            </span>
+        <div className="layout-header__inner mx-auto flex h-16 max-w-7xl items-center justify-between px-4 lg:px-6">
+          <Link to="/" viewTransition className="layout-brand flex min-h-[44px] items-center gap-2" aria-label="BGC Sports Home">
+            <BrandLogo />
           </Link>
 
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Main navigation">
+          <nav className="layout-primary-nav hidden items-center gap-1 md:flex" aria-label="Main navigation">
             {NAV_LINKS.map((link) => {
               const active = isNavActive(link, location, tab);
               return (
@@ -250,11 +249,9 @@ export default function Layout() {
                   key={link.label}
                   to={link.path}
                   viewTransition
-                  className={`min-h-[44px] px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-150 inline-flex items-center ${
+                  className={`layout-primary-nav__link min-h-[44px] px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-150 inline-flex items-center ${
                     active
-                      ? (link.label === 'Sports' || link.label === 'Live TV'
-                        ? 'nav-pill-active'
-                        : 'text-[var(--text-primary)] font-semibold bg-[var(--bg-tertiary)]')
+                      ? 'is-active text-[var(--text-primary)] font-semibold bg-[var(--bg-tertiary)]'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}
                 >
@@ -264,7 +261,7 @@ export default function Layout() {
             })}
           </nav>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="layout-header__controls flex items-center gap-2 sm:gap-3">
             <Link
               to="/?tab=channels"
               viewTransition
@@ -360,7 +357,7 @@ export default function Layout() {
         )}
       </header>
 
-      <main className="flex-1">
+      <main className="layout-main flex-1">
         <Outlet />
       </main>
 

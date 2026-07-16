@@ -19,13 +19,48 @@ const LiveScoresSection = lazy(() => import('../components/LiveScoresSection.jsx
 const PredictionLeaderboard = lazy(() => import('../components/PredictionLeaderboard.jsx'));
 
 const MAIN_TABS = [
+  { id: 'predict', label: 'Predictions' },
+  { id: 'scores', label: 'Live scores' },
   { id: 'worldcup', label: 'World Cup' },
-  { id: 'predict', label: 'Predict' },
   { id: 'channels', label: 'Channels' },
-  { id: 'scores', label: 'Live Scores' },
 ];
 
 const PRIMARY_CATEGORIES = ['All', 'Sports', 'Live', 'News', 'Entertainment'];
+
+const HERO_COPY = {
+  predict: {
+    kicker: 'Live matchday',
+    title: 'Call the score',
+    accent: 'before kickoff.',
+    description: 'Set your predictions, follow the result, and climb the BGC table without losing sight of the match.',
+    metricLabel: 'Prediction desk',
+    metricValue: 'OPEN',
+  },
+  scores: {
+    kicker: 'Matchday signal',
+    title: 'Every goal,',
+    accent: 'as it happens.',
+    description: 'Follow live scorelines, match status, and the next fixtures from one focused broadcast desk.',
+    metricLabel: 'Score feed',
+    metricValue: 'LIVE',
+  },
+  worldcup: {
+    kicker: 'Tournament watch',
+    title: 'Every nation.',
+    accent: 'One signal.',
+    description: 'Track the World Cup, move from fixtures to standings, and open the match center without breaking focus.',
+    metricLabel: 'World Cup',
+    metricValue: 'ON',
+  },
+  channels: {
+    kicker: 'Channel control',
+    title: 'Find the match.',
+    accent: 'Start watching.',
+    description: 'Search live sports and entertainment channels through a faster, cleaner match-night interface.',
+    metricLabel: 'Channel grid',
+    metricValue: 'READY',
+  },
+};
 
 function HomeContent({
   activeTab,
@@ -41,33 +76,41 @@ function HomeContent({
   filteredChannels,
   featured,
 }) {
+  const hero = HERO_COPY[activeTab] || HERO_COPY.predict;
+
   return (
     <>
-      <section className="home-hero">
-        <div className="home-hero__content">
-          <h1 className="type-display text-3xl text-white drop-shadow-lg sm:text-5xl md:text-6xl">
-            Live Sports{' '}
-            <span className="hero-gradient-text">Streaming</span>
+      <section className="home-hero signal-hero">
+        <div className="home-hero__content signal-hero__content">
+          <span className="signal-hero__kicker">
+            <span className="signal-hero__pulse" aria-hidden="true" />
+            {hero.kicker}
+          </span>
+          <h1 className="signal-hero__title type-display">
+            {hero.title}<br />
+            <span>{hero.accent}</span>
           </h1>
-          <p className="type-body mt-3 text-slate-100/90 max-w-md mx-auto sm:mt-4 sm:text-lg drop-shadow">
-            Your home for live sports, anytime, anywhere.
-          </p>
-          <div className="home-hero__actions">
-            <Link to="/?tab=worldcup" className="btn-hero-primary">
-              <span aria-hidden="true">🏆</span>
-              FIFA World Cup
+          <p className="signal-hero__description">{hero.description}</p>
+          <div className="home-hero__actions signal-hero__actions">
+            <Link to="/?tab=predict" className="btn-hero-primary">
+              <span className="signal-target" aria-hidden="true" />
+              Make a prediction
             </Link>
-            <Link to="/category/Sports" viewTransition className="btn-hero-secondary">
-              <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M8 5v14l11-7z" />
+            <Link to="/?tab=scores" className="btn-hero-secondary">
+              <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h3l2-6 4 12 3-9 2 3h4" />
               </svg>
-              Watch Sports
+              View live scores
             </Link>
           </div>
         </div>
+        <div className="signal-hero__metric" aria-label={`${hero.metricLabel}: ${hero.metricValue}`}>
+          <span>{hero.metricLabel}</span>
+          <strong>{hero.metricValue}</strong>
+        </div>
       </section>
 
-      <section className="home-pitch">
+      <section className="home-pitch signal-workspace">
         <div className="home-pitch__inner">
           <div className="home-tabs no-scrollbar" role="tablist">
             {MAIN_TABS.map((tab) => (
@@ -245,7 +288,7 @@ export default function HomePage() {
   const searchRef = useRef(null);
 
   const tabParam = searchParams.get('tab');
-  const activeTab = MAIN_TABS.some((t) => t.id === tabParam) ? tabParam : 'worldcup';
+  const activeTab = MAIN_TABS.some((t) => t.id === tabParam) ? tabParam : 'predict';
 
   const setActiveTab = (tabId) => {
     setSearchParams({ tab: tabId }, { replace: true });
@@ -253,7 +296,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!tabParam) {
-      setSearchParams({ tab: 'worldcup' }, { replace: true });
+      setSearchParams({ tab: 'predict' }, { replace: true });
     }
   }, [tabParam, setSearchParams]);
 
