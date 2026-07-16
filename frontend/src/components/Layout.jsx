@@ -170,7 +170,10 @@ export default function Layout() {
     setMobileMenuOpen(false);
   }, [location.pathname, location.search]);
 
-  const isHomepage = location.pathname === '/';
+  // Scene pages share the landing page's stadium backdrop + glass chrome.
+  // Every routed page inside Layout (home, category, profile, match, watch,
+  // 404) now uses the unified stadium design, so this is always true.
+  const isScenePage = true;
 
   const siteOrigin = typeof window !== 'undefined' ? window.location.origin : getSiteOrigin();
   const siteJsonLd = {
@@ -219,7 +222,7 @@ export default function Layout() {
   };
 
   return (
-    <div className={`flex min-h-screen flex-col bg-[var(--bg-primary)] transition-colors duration-200 ${isHomepage ? 'layout--homepage' : ''}${isHomepage && isScrolling ? ' is-scrolling' : ''}`}>
+    <div className={`flex min-h-screen flex-col bg-[var(--bg-primary)] transition-colors duration-200 ${isScenePage ? 'layout--homepage' : ''}${isScenePage && isScrolling ? ' is-scrolling' : ''}`}>
       <JsonLd id="site-organization" data={siteJsonLd} />
       <div className="layout-ticker">
         <LiveScoreTicker />

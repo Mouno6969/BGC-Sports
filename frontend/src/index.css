@@ -609,6 +609,109 @@ body {
   gap: 1rem;
 }
 
+/* ── Scene design system (interior pages match landing) ────── */
+/* Translucent glass surface used across category/match/profile/watch. */
+.scene-card {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 8, 22, 0.62);
+  border-radius: 1rem;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.scene-card--glow {
+  border-color: rgba(168, 85, 247, 0.45);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.45),
+    0 0 32px rgba(168, 85, 247, 0.18),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+}
+
+.layout--homepage.is-scrolling .scene-card {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Purple pill tabs — active pill matches landing category pills. */
+.pill-tab {
+  flex-shrink: 0;
+  min-height: 40px;
+  white-space: nowrap;
+  border-radius: 9999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgba(226, 232, 240, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 8, 22, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.pill-tab:hover {
+  color: #fff;
+  border-color: rgba(168, 85, 247, 0.4);
+}
+
+.pill-tab:active {
+  transform: scale(0.96);
+}
+
+.pill-tab.is-active {
+  background: var(--brand-purple);
+  border-color: var(--brand-purple);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);
+}
+
+/* Glass input matching landing search field. */
+.scene-input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  outline: none;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.scene-input::placeholder {
+  color: #94a3b8;
+}
+
+.scene-input:focus {
+  border-color: var(--brand-purple);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.25);
+}
+
+/* Glass list row (history, h2h, most-watched, stream picks). */
+.scene-row {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 8, 22, 0.5);
+  border-radius: 0.75rem;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.scene-row:hover {
+  border-color: rgba(168, 85, 247, 0.4);
+  background: rgba(20, 14, 40, 0.6);
+}
+
+/* Stat card with purple value (profile overview). */
+.scene-stat {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 8, 22, 0.55);
+  border-radius: 0.875rem;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
 @media (min-width: 640px) {
   .home-section-stack {
     gap: 1.25rem;
@@ -983,8 +1086,8 @@ body.keyboard-open .chat-panel-composer {
   width: 100%;
   gap: 0.35rem;
   padding: 0.45rem;
-  background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border-primary);
+  background: rgba(10, 8, 22, 0.55);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .watch-primary-tabs__btn {
@@ -1009,9 +1112,9 @@ body.keyboard-open .chat-panel-composer {
 }
 
 .watch-primary-tabs__btn.is-active {
-  background: var(--bg-secondary);
-  color: var(--accent);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25), 0 0 0 1px var(--border-primary);
+  background: var(--brand-purple-muted);
+  color: var(--brand-purple-light);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(168, 85, 247, 0.35);
 }
 
 .watch-primary-tabs__icon {

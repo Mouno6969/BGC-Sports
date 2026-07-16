@@ -40,10 +40,10 @@ const TABS = [
 
 function StatCard({ label, value, sub }) {
   return (
-    <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-tertiary)]/60 px-3 py-2.5 text-center">
-      <p className="text-lg font-extrabold tabular-nums text-[var(--accent)]">{value}</p>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">{label}</p>
-      {sub && <p className="mt-0.5 text-[9px] text-[var(--text-muted)]">{sub}</p>}
+    <div className="scene-stat px-3 py-2.5 text-center">
+      <p className="text-lg font-extrabold tabular-nums text-[var(--brand-purple-light)]">{value}</p>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
+      {sub && <p className="mt-0.5 text-[9px] text-slate-500">{sub}</p>}
     </div>
   );
 }
@@ -193,11 +193,7 @@ export default function ProfileHub({ compact = false, onClose }) {
             data-haptic="selection"
             data-haptic-tab="1"
             onClick={() => setTab(t.id)}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold transition-all ${
-              tab === t.id
-                ? 'bg-accent/15 text-accent ring-1 ring-accent/30'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-            }`}
+            className={`pill-tab ${tab === t.id ? 'is-active' : ''}`}
           >
             {t.label}
           </button>
@@ -246,9 +242,9 @@ export default function ProfileHub({ compact = false, onClose }) {
                 {topChannels.map(([ch, n]) => (
                   <li
                     key={ch}
-                    className="flex items-center justify-between rounded-lg border border-[var(--border-primary)] bg-[var(--bg-card)] px-3 py-2 text-sm"
+                    className="scene-row flex items-center justify-between px-3 py-2 text-sm"
                   >
-                    <span className="truncate font-semibold text-[var(--text-primary)]">{ch}</span>
+                    <span className="truncate font-semibold text-white">{ch}</span>
                     <span className="shrink-0 text-[11px] font-bold text-[var(--text-muted)]">
                       {n}×
                     </span>
@@ -287,9 +283,9 @@ export default function ProfileHub({ compact = false, onClose }) {
             (stats.history || []).map((h) => (
               <div
                 key={h.id}
-                className="flex items-center gap-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] px-3 py-2.5"
+                className="scene-row flex items-center gap-3 px-3 py-2.5"
               >
-                <div className="flex h-10 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--bg-tertiary)]">
+                <div className="flex h-10 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-[#4c1d95]/70 to-[#1e1033]/80">
                   {h.logo && h.logo.startsWith('http') ? (
                     <img
                       src={logoUrl(h.logo)}
@@ -324,7 +320,7 @@ export default function ProfileHub({ compact = false, onClose }) {
                       if (h.channelUrl) armChannelMediaTransition(h.channelUrl);
                     }}
                     onClick={() => onClose?.()}
-                    className="shrink-0 rounded-lg bg-accent/15 px-2.5 py-1.5 text-[10px] font-bold text-accent"
+                    className="shrink-0 rounded-lg bg-[var(--brand-purple-muted)] px-2.5 py-1.5 text-[10px] font-bold text-[var(--brand-purple-light)] ring-1 ring-[var(--brand-purple)]/30"
                   >
                     Watch
                   </Link>
@@ -348,7 +344,7 @@ export default function ProfileHub({ compact = false, onClose }) {
                   key={t}
                   type="button"
                   onClick={() => toggleTeam(t)}
-                  className="rounded-full bg-accent px-3 py-1 text-[11px] font-bold text-white"
+                  className="rounded-full bg-[var(--brand-purple)] px-3 py-1 text-[11px] font-bold text-white shadow-md shadow-[var(--brand-purple)]/25"
                 >
                   {t} ×
                 </button>
@@ -365,8 +361,8 @@ export default function ProfileHub({ compact = false, onClose }) {
                   onClick={() => toggleTeam(t)}
                   className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-all ${
                     on
-                      ? 'bg-accent text-white'
-                      : 'border border-[var(--border-primary)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:border-accent/40'
+                      ? 'bg-[var(--brand-purple)] text-white shadow-md shadow-[var(--brand-purple)]/25'
+                      : 'border border-white/10 bg-black/30 text-slate-300 hover:border-[var(--brand-purple)]/40 hover:text-white'
                   }`}
                 >
                   {t}
@@ -411,7 +407,7 @@ export default function ProfileHub({ compact = false, onClose }) {
               {lockedBadges.map((b) => (
                 <div
                   key={b.id}
-                  className="flex items-start gap-2.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] px-3 py-2.5 opacity-60"
+                  className="scene-row flex items-start gap-2.5 px-3 py-2.5 opacity-60"
                 >
                   <span className="text-2xl leading-none grayscale">{b.icon}</span>
                   <div className="min-w-0">
@@ -445,7 +441,7 @@ export default function ProfileHub({ compact = false, onClose }) {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)]"
+              className="rounded-lg border border-white/15 bg-black/30 px-3 py-1.5 text-xs font-semibold text-slate-200 backdrop-blur-sm transition-colors hover:border-[var(--brand-purple)]/40"
             >
               {form.avatar ? 'Change picture' : 'Upload picture'}
             </button>
@@ -472,7 +468,7 @@ export default function ProfileHub({ compact = false, onClose }) {
               onChange={(e) => update('displayName', e.target.value)}
               placeholder={`Leave empty for ${guestName}`}
               maxLength={MAX_NAME_LEN}
-              className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
+              className="scene-input px-3 py-2 text-sm"
             />
           </div>
           <div>
@@ -484,7 +480,7 @@ export default function ProfileHub({ compact = false, onClose }) {
               value={form.dob}
               max={new Date().toISOString().slice(0, 10)}
               onChange={(e) => update('dob', e.target.value)}
-              className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)] [color-scheme:dark]"
+              className="scene-input px-3 py-2 text-sm [color-scheme:dark]"
             />
           </div>
           <div>
@@ -496,7 +492,7 @@ export default function ProfileHub({ compact = false, onClose }) {
               onChange={(e) => update('address', e.target.value)}
               placeholder="City, Country"
               maxLength={MAX_ADDRESS_LEN}
-              className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
+              className="scene-input px-3 py-2 text-sm"
             />
           </div>
           <div>
@@ -512,7 +508,7 @@ export default function ProfileHub({ compact = false, onClose }) {
               maxLength={MAX_BIO_LEN}
               rows={3}
               placeholder="Tell people a little about yourself…"
-              className="w-full resize-none rounded-lg border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
+              className="scene-input resize-none px-3 py-2 text-sm"
             />
           </div>
           <p className="text-[10px] text-[var(--text-muted)]">

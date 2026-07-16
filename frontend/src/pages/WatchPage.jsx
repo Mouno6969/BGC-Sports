@@ -1113,14 +1113,14 @@ export default function WatchPage() {
     return (
       <div className="mx-auto max-w-7xl px-4 py-16 text-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent-muted)] ring-1 ring-[var(--accent)]/20">
-            <svg className="h-7 w-7 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--brand-purple-muted)] ring-1 ring-[var(--brand-purple)]/30">
+            <svg className="h-7 w-7 text-[var(--brand-purple-light)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
           </div>
-          <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">No Channel Selected</h2>
-          <p className="text-sm text-[var(--text-muted)]">Choose a channel from the homepage to start watching.</p>
-          <Link to="/" className="mt-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white active:scale-95 transition-transform">
+          <h2 className="font-display text-lg font-bold text-white">No Channel Selected</h2>
+          <p className="text-sm text-slate-300">Choose a channel from the homepage to start watching.</p>
+          <Link to="/" className="mt-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white shadow-lg shadow-[var(--accent)]/20 active:scale-95 transition-transform">
             Browse Channels
           </Link>
         </div>
@@ -1401,7 +1401,7 @@ export default function WatchPage() {
           {!hideSecondaryChrome && (
             <div className="watch-channel-strip mx-3 mt-1.5 flex items-center gap-2 sm:mx-0 sm:mt-2">
               <div className="min-w-0 flex-1">
-                <h1 className="truncate font-display text-sm font-bold text-[var(--text-primary)] sm:text-base">{name}</h1>
+                <h1 className="truncate font-display text-sm font-bold text-white drop-shadow sm:text-base">{name}</h1>
                 <div className="mt-0.5 flex items-center gap-1.5">
                   <LiveBadge />
                   {availableLevels.length > 0 && (
@@ -1452,8 +1452,8 @@ export default function WatchPage() {
           >
             <div
               className={[
-                'overflow-hidden rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)]',
-                theater && !landscapeChatPeek ? 'border-0 bg-transparent' : '',
+                'scene-card overflow-hidden',
+                theater && !landscapeChatPeek ? '!border-0 !bg-transparent !shadow-none' : '',
                 keyboardOpen ? 'watch-panel-keyboard-shell' : '',
                 landscapePure && landscapeChatPeek ? 'watch-landscape-peek__panel' : '',
               ].filter(Boolean).join(' ')}
@@ -1538,10 +1538,10 @@ export default function WatchPage() {
               <button
                 type="button"
                 onClick={() => setShowMoreChannels((v) => !v)}
-                className="flex w-full items-center justify-between rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-3 py-2.5 text-left sm:border-0 sm:bg-transparent sm:px-0 sm:py-0"
+                className="scene-row flex w-full items-center justify-between px-3 py-2.5 text-left sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:shadow-none"
               >
-                <h3 className="font-display text-sm font-bold text-[var(--text-primary)]">More Sports Channels</h3>
-                <span className="text-xs font-semibold text-[var(--accent)] sm:hidden">
+                <h3 className="font-display text-sm font-bold text-white">More Sports Channels</h3>
+                <span className="text-xs font-semibold text-[var(--brand-purple-light)] sm:hidden">
                   {showMoreChannels ? 'Hide' : 'Show'}
                 </span>
               </button>
@@ -1552,9 +1552,9 @@ export default function WatchPage() {
                     to={`/watch?url=${encodeURIComponent(ch.url)}&name=${encodeURIComponent(ch.name)}&logo=${encodeURIComponent(ch.logo || '')}&source=${encodeURIComponent(source || '')}`}
                     viewTransition
                     onPointerDown={() => armChannelMediaTransition(ch.url)}
-                    className="flex items-center gap-2 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-2 transition-all hover:border-[var(--accent)]/30 hover:bg-[var(--bg-tertiary)] active:scale-[0.98]"
+                    className="scene-row flex items-center gap-2 p-2 transition-all active:scale-[0.98]"
                   >
-                    <div className="flex h-8 w-10 shrink-0 items-center justify-center overflow-hidden rounded bg-[var(--bg-tertiary)]">
+                    <div className="flex h-8 w-10 shrink-0 items-center justify-center overflow-hidden rounded bg-gradient-to-br from-[#4c1d95]/70 to-[#1e1033]/80">
                       {ch.logo && ch.logo.startsWith('http') ? (
                         <img src={ch.logo} alt={ch.name} className="h-full w-full object-contain p-0.5" onError={(e) => { e.target.style.display = 'none'; }} />
                       ) : (
@@ -1564,7 +1564,7 @@ export default function WatchPage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="truncate text-[10px] font-bold text-[var(--text-primary)]">{ch.name}</p>
+                      <p className="truncate text-[10px] font-bold text-white">{ch.name}</p>
                       <LiveBadge className="scale-90 origin-left" />
                     </div>
                   </Link>
@@ -1583,7 +1583,7 @@ export default function WatchPage() {
             aria-label="Watch sidebar"
           >
             <div className="sticky top-[88px]">
-              <div className={`flex flex-col rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] overflow-hidden ${theater ? 'h-auto border-0 bg-transparent' : 'h-[calc(100vh-108px)] min-h-[480px]'}`}>
+              <div className={`scene-card flex flex-col overflow-hidden ${theater ? 'h-auto !border-0 !bg-transparent !shadow-none' : 'h-[calc(100vh-108px)] min-h-[480px]'}`}>
                 <div className={theater ? 'hidden' : 'shrink-0'}>
                   <PanelTabs
                     active={activePanel}

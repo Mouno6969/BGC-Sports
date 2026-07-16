@@ -1,60 +1,55 @@
 // ---------------------------------------------------------------------------
 // CategoryPage — Shows channels filtered by group/category.
+// Redesigned to match the landing page: stadium backdrop, glass hero banner
+// with purple gradient title, glass filter pills + search, pitch channel cards.
 // ---------------------------------------------------------------------------
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { apiGet } from '../lib/config.js';
 import ChannelCard from '../components/ChannelCard.jsx';
+import StadiumGrassScene from '../components/StadiumGrassScene.jsx';
 import { ChannelGridSkeleton } from '../components/Skeleton.jsx';
 
 const CATEGORY_INFO = {
   Sports: {
-    title: 'Sports Channels',
+    title: 'Sports',
+    highlight: 'Channels',
     description: 'Watch live sports including Cricket, Football, NBA, FIFA, Tennis and more.',
-    gradient: 'from-green-900/50 via-[var(--bg-primary)] to-[var(--bg-primary)]',
-    accent: 'text-green-400',
   },
   Live: {
-    title: 'Live Channels',
+    title: 'Live',
+    highlight: 'Channels',
     description: 'Currently broadcasting live streams — IPL, Premier League, and more.',
-    gradient: 'from-red-900/50 via-[var(--bg-primary)] to-[var(--bg-primary)]',
-    accent: 'text-red-400',
   },
   Bangla: {
-    title: 'Bangla Channels',
+    title: 'Bangla',
+    highlight: 'Channels',
     description: 'Popular Bangladeshi TV channels including news, entertainment, and drama.',
-    gradient: 'from-blue-900/50 via-[var(--bg-primary)] to-[var(--bg-primary)]',
-    accent: 'text-blue-400',
   },
   News: {
-    title: 'News Channels',
+    title: 'News',
+    highlight: 'Channels',
     description: 'Stay updated with international and local news channels.',
-    gradient: 'from-purple-900/50 via-[var(--bg-primary)] to-[var(--bg-primary)]',
-    accent: 'text-purple-400',
   },
   Kids: {
-    title: 'Kids Channels',
+    title: 'Kids',
+    highlight: 'Channels',
     description: 'Fun and educational content for children.',
-    gradient: 'from-yellow-900/50 via-[var(--bg-primary)] to-[var(--bg-primary)]',
-    accent: 'text-yellow-400',
   },
   Religious: {
-    title: 'Religious Channels',
+    title: 'Religious',
+    highlight: 'Channels',
     description: 'Islamic, Quran, and other religious programming.',
-    gradient: 'from-amber-900/50 via-[var(--bg-primary)] to-[var(--bg-primary)]',
-    accent: 'text-amber-400',
   },
   Indian: {
-    title: 'Indian Channels',
+    title: 'Indian',
+    highlight: 'Channels',
     description: 'Popular Indian TV channels and entertainment.',
-    gradient: 'from-orange-900/50 via-[var(--bg-primary)] to-[var(--bg-primary)]',
-    accent: 'text-orange-400',
   },
   Movies: {
-    title: 'Movie Channels',
+    title: 'Movie',
+    highlight: 'Channels',
     description: 'Watch movies and cinema channels.',
-    gradient: 'from-pink-900/50 via-[var(--bg-primary)] to-[var(--bg-primary)]',
-    accent: 'text-pink-400',
   },
 };
 
@@ -66,10 +61,9 @@ export default function CategoryPage() {
   const [error, setError] = useState(null);
 
   const info = CATEGORY_INFO[group] || {
-    title: `${group} Channels`,
+    title: group,
+    highlight: 'Channels',
     description: `Browse ${group} channels.`,
-    gradient: 'from-slate-900/50 via-[var(--bg-primary)] to-[var(--bg-primary)]',
-    accent: 'text-slate-400',
   };
 
   useEffect(() => {
@@ -111,62 +105,89 @@ export default function CategoryPage() {
     : channels;
 
   return (
-    <div className="page-container space-y-6">
-      <section className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${info.gradient} p-5 sm:p-8`}>
-        <div className="relative z-10">
-          <nav className="mb-3 flex items-center gap-2 type-caption text-[var(--text-muted)]" aria-label="Breadcrumb">
-            <Link to="/" className="hover:text-[var(--accent)]">Home</Link>
-            <span aria-hidden="true">/</span>
-            <span className={info.accent}>{group}</span>
-          </nav>
-          <h1 className="type-h1 text-[var(--text-primary)]">{info.title}</h1>
-          <p className="type-body mt-2 max-w-lg text-[var(--text-secondary)]">{info.description}</p>
-          <div className="mt-3 flex items-center gap-2">
-            <span className="h-2 w-2 animate-pulseLive rounded-full bg-red-500" />
-            <span className="text-xs font-bold text-red-400">{channels.length} channels available</span>
+    <StadiumGrassScene>
+      <div className="page-container space-y-5">
+        <nav className="flex items-center gap-2 type-caption text-slate-300" aria-label="Breadcrumb">
+          <Link to="/" viewTransition className="hover:text-[var(--brand-purple-light)]">Home</Link>
+          <span aria-hidden="true">/</span>
+          <span className="text-[var(--brand-purple-light)]">{group}</span>
+        </nav>
+
+        {/* Hero banner — glass card matching landing hero language */}
+        <section className="scene-card relative overflow-hidden p-5 sm:p-8">
+          <div
+            className="pointer-events-none absolute inset-0 opacity-70"
+            style={{
+              background:
+                'radial-gradient(ellipse 80% 90% at 15% 0%, rgba(168, 85, 247, 0.22) 0%, transparent 60%)',
+            }}
+            aria-hidden="true"
+          />
+          <div className="relative z-10">
+            <h1 className="type-display text-3xl text-white drop-shadow-lg sm:text-4xl">
+              {info.title} <span className="hero-gradient-text">{info.highlight}</span>
+            </h1>
+            <p className="type-body mt-2 max-w-lg text-slate-200/90">{info.description}</p>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-red-500/35 bg-[var(--live-red-muted)] px-3 py-1.5 shadow-[var(--live-glow)]">
+              <span className="h-2 w-2 animate-pulseLive rounded-full bg-red-500" />
+              <span className="text-[11px] font-extrabold uppercase tracking-wide text-red-300">
+                {channels.length} channels
+              </span>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <div className="relative max-w-md">
-        <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
-          type="search"
-          placeholder={`Search ${group} channels...`}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label={`Search ${group} channels`}
-          className="w-full rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] py-2.5 pl-10 pr-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30"
-        />
-      </div>
-
-      {loading ? (
-        <ChannelGridSkeleton count={10} />
-      ) : error ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] py-16 text-center">
-          <p className="type-body text-[var(--text-muted)]">{error}</p>
-          <button type="button" onClick={() => window.location.reload()} className="mt-4 min-h-[44px] text-sm font-semibold text-[var(--accent)] hover:underline">
-            Retry
-          </button>
+        {/* Search — glass input with purple focus ring */}
+        <div className="relative max-w-md">
+          <svg className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="search"
+            placeholder={`Search ${group} channels...`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label={`Search ${group} channels`}
+            className="scene-input py-3 pl-11 pr-4 text-sm"
+          />
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] py-16">
-          <p className="type-body text-[var(--text-muted)]">No channels found</p>
-          {search && (
-            <button type="button" onClick={() => setSearch('')} className="mt-4 min-h-[44px] text-sm font-semibold text-[var(--accent)] hover:underline">
-              Clear search
+
+        {loading ? (
+          <ChannelGridSkeleton count={10} pitch />
+        ) : error ? (
+          <div className="scene-card flex flex-col items-center justify-center py-16 text-center">
+            <p className="type-body text-slate-300">{error}</p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-4 inline-flex min-h-[44px] items-center rounded-xl bg-[var(--accent)] px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-[var(--accent)]/20 transition-transform active:scale-[0.97]"
+            >
+              Retry
             </button>
-          )}
-        </div>
-      ) : (
-        <div className="channel-grid">
-          {filtered.map((ch) => (
-            <ChannelCard key={ch.url || ch.name} channel={ch} />
-          ))}
-        </div>
-      )}
-    </div>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="scene-card flex flex-col items-center justify-center py-16">
+            <p className="type-body text-slate-300">No channels found</p>
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="mt-4 min-h-[44px] text-sm font-semibold text-[var(--brand-purple-light)] hover:underline"
+              >
+                Clear search
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="channel-grid">
+            {filtered.map((ch) => (
+              <ChannelCard key={ch.url || ch.name} channel={ch} pitch />
+            ))}
+          </div>
+        )}
+
+        <div className="h-14 md:h-2" />
+      </div>
+    </StadiumGrassScene>
   );
 }

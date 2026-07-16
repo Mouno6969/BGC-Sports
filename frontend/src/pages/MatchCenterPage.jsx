@@ -10,6 +10,7 @@ import { formatKickoff, localTimeHint } from '../lib/utils.js';
 import { extractEventId, matchPredictPath } from '../lib/matchLinks.js';
 import { buildSportsEvent } from '../lib/sportsEventSchema.js';
 import JsonLd from '../components/JsonLd.jsx';
+import StadiumGrassScene from '../components/StadiumGrassScene.jsx';
 import LiveBadge from '../components/LiveBadge.jsx';
 import { Skeleton, MatchCardSkeleton } from '../components/Skeleton.jsx';
 import MatchActionRow from '../components/MatchActionRow.jsx';
@@ -441,19 +442,27 @@ export default function MatchCenterPage() {
     };
   }, [match]);
 
-  if (loading) return <MatchCenterSkeleton />;
+  if (loading) {
+    return (
+      <StadiumGrassScene>
+        <MatchCenterSkeleton />
+      </StadiumGrassScene>
+    );
+  }
 
   if (error || !match) {
     return (
-      <div className="page-container max-w-lg py-16 text-center">
-        <h1 className="type-h2 text-[var(--text-primary)]">Match not found</h1>
-        <p className="mt-2 text-sm text-[var(--text-muted)]">
-          {error || 'This match center page is unavailable.'}
-        </p>
-        <Link to="/?tab=scores" viewTransition className="mt-4 inline-block text-sm font-bold text-accent">
-          ← Back to scores
-        </Link>
-      </div>
+      <StadiumGrassScene>
+        <div className="page-container max-w-lg py-16 text-center">
+          <h1 className="type-h2 text-white drop-shadow">Match not found</h1>
+          <p className="mt-2 text-sm text-slate-300">
+            {error || 'This match center page is unavailable.'}
+          </p>
+          <Link to="/?tab=scores" viewTransition className="mt-4 inline-block text-sm font-bold text-[var(--brand-purple-light)]">
+            ← Back to scores
+          </Link>
+        </div>
+      </StadiumGrassScene>
     );
   }
 
@@ -470,24 +479,33 @@ export default function MatchCenterPage() {
   ];
 
   return (
+    <StadiumGrassScene>
     <article className="page-container max-w-5xl space-y-4 py-4 md:py-6">
       <JsonLd id="match-center-jsonld" data={sportsJsonLd} />
 
       {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--text-muted)]" aria-label="Breadcrumb">
-        <Link to="/" viewTransition className="hover:text-accent">Home</Link>
+      <nav className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-300" aria-label="Breadcrumb">
+        <Link to="/" viewTransition className="hover:text-[var(--brand-purple-light)]">Home</Link>
         <span>/</span>
-        <Link to={watch?.scoresTab || '/?tab=scores'} viewTransition className="hover:text-accent">
+        <Link to={watch?.scoresTab || '/?tab=scores'} viewTransition className="hover:text-[var(--brand-purple-light)]">
           {match.league || 'Scores'}
         </Link>
         <span>/</span>
-        <span className="text-[var(--text-secondary)]">
+        <span className="font-semibold text-white">
           {match.home} vs {match.away}
         </span>
       </nav>
 
       {/* Hero scoreboard */}
-      <header className="overflow-hidden rounded-2xl border border-[var(--border-primary)] bg-gradient-to-b from-[var(--bg-secondary)] to-[var(--bg-card)] p-4 sm:p-6">
+      <header className="scene-card scene-card--glow relative overflow-hidden p-4 sm:p-6">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-60"
+          style={{
+            background:
+              'radial-gradient(ellipse 90% 80% at 50% 0%, rgba(168, 85, 247, 0.16) 0%, transparent 65%)',
+          }}
+          aria-hidden="true"
+        />
         <div className="mb-4 flex flex-wrap items-center justify-center gap-2 text-center">
           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
             {match.league}
@@ -548,20 +566,20 @@ export default function MatchCenterPage() {
         <p className="mt-1 text-center text-[9px] text-[var(--text-muted)]">{localTimeHint()}</p>
 
         {/* Match hub action row — primary way into Watch / Predict / Stats / Party */}
-        <MatchActionRow match={match} stopPropagation={false} className="mt-4" />
+        <MatchActionRow match={match} stopPropagation={false} className="relative mt-4" />
       </header>
 
       {/* Watch CTAs */}
       <section
         id="match-watch"
-        className={`rounded-2xl border p-4 scroll-mt-24 ${
+        className={`scene-card p-4 scroll-mt-24 ${
           partyIntent || focus === 'watch'
-            ? 'border-accent/50 bg-accent/10 ring-1 ring-accent/30'
-            : 'border-accent/25 bg-accent/5'
+            ? '!border-[var(--accent)]/50 ring-1 ring-[var(--accent)]/30'
+            : ''
         }`}
         aria-labelledby="watch-heading"
       >
-        <h2 id="watch-heading" className="mb-1 text-sm font-extrabold text-[var(--text-primary)]">
+        <h2 id="watch-heading" className="mb-1 text-sm font-extrabold text-white">
           {partyIntent ? 'Start a Watch Party' : 'Watch this match'}
         </h2>
         <p className="mb-3 text-[11px] text-[var(--text-muted)]">
@@ -583,9 +601,9 @@ export default function MatchCenterPage() {
                   onPointerDown={() => {
                     if (ch.url) armChannelMediaTransition(ch.url);
                   }}
-                  className="flex items-center gap-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-2.5 transition-colors hover:border-accent/40"
+                  className="scene-row flex items-center gap-3 p-2.5"
                 >
-                  <div className="flex h-10 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--bg-tertiary)]">
+                  <div className="flex h-10 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-[#4c1d95]/70 to-[#1e1033]/80">
                     {ch.logo ? (
                       <img src={logoUrl(ch.logo)} alt="" className="h-full w-full object-contain p-0.5" />
                     ) : (
@@ -593,7 +611,7 @@ export default function MatchCenterPage() {
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-[var(--text-primary)]">{ch.name}</p>
+                    <p className="truncate text-sm font-bold text-white">{ch.name}</p>
                     <p className="text-[10px] text-accent">
                       {partyIntent ? `Join party ${partyCode} →` : 'Watch free on BGC Sports →'}
                     </p>
@@ -632,18 +650,14 @@ export default function MatchCenterPage() {
             type="button"
             data-haptic="selection"
             onClick={() => setTab(t.id)}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold transition-all ${
-              tab === t.id
-                ? 'bg-accent/15 text-accent ring-1 ring-accent/30'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-            }`}
+            className={`pill-tab ${tab === t.id ? 'is-active' : ''}`}
           >
             {t.label}
           </button>
         ))}
       </div>
 
-      <section className="rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-4 sm:p-5">
+      <section className="scene-card p-4 sm:p-5">
         {tab === 'timeline' && <Timeline events={match.timeline} />}
         {tab === 'lineups' && (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -660,7 +674,7 @@ export default function MatchCenterPage() {
               match.headToHead.map((g) => (
                 <div
                   key={g.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] px-3 py-2.5 text-sm"
+                  className="scene-row flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm"
                 >
                   <div className="min-w-0">
                     <p className="font-bold text-[var(--text-primary)]">
@@ -692,7 +706,7 @@ export default function MatchCenterPage() {
       </div>
 
       {match.article?.headline && (
-        <aside className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] p-4">
+        <aside className="scene-card p-4">
           <p className="text-[10px] font-bold uppercase text-[var(--text-muted)]">Match report</p>
           <h3 className="mt-1 text-sm font-bold text-[var(--text-primary)]">{match.article.headline}</h3>
           {match.article.description && (
@@ -704,16 +718,17 @@ export default function MatchCenterPage() {
       )}
 
       <footer className="flex flex-wrap gap-3 pb-8 text-[11px]">
-        <Link to={watch?.scoresTab || '/?tab=scores'} viewTransition className="font-bold text-accent">
+        <Link to={watch?.scoresTab || '/?tab=scores'} viewTransition className="font-bold text-[var(--brand-purple-light)]">
           ← All scores
         </Link>
-        <Link to={matchPredictPath(match)} viewTransition className="font-bold text-[var(--text-muted)] hover:text-accent">
+        <Link to={matchPredictPath(match)} viewTransition className="font-bold text-slate-300 hover:text-[var(--brand-purple-light)]">
           Predict this match
         </Link>
-        <Link to="/?tab=worldcup" viewTransition className="font-bold text-[var(--text-muted)] hover:text-accent">
+        <Link to="/?tab=worldcup" viewTransition className="font-bold text-slate-300 hover:text-[var(--brand-purple-light)]">
           World Cup channels
         </Link>
       </footer>
     </article>
+    </StadiumGrassScene>
   );
 }
