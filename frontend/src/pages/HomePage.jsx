@@ -90,30 +90,6 @@ function HomeHero() {
             </div>
           </dl>
         </div>
-
-        <aside className="home-spotlight animate-hero-in" aria-label="Featured tournament">
-          <div className="home-spotlight__topline">
-            <span className="home-spotlight__icon"><TrophyIcon /></span>
-            <span>Featured tournament</span>
-            <span className="home-spotlight__live"><i /> Live</span>
-          </div>
-          <p className="home-spotlight__kicker">FIFA World Cup 2026</p>
-          <h2>World football has one home.</h2>
-          <p className="home-spotlight__copy">
-            Fixtures, live channels, group standings, and local kickoff times — all in one place.
-          </p>
-          <div className="home-spotlight__meta">
-            <span><strong>48</strong> teams</span>
-            <span><strong>104</strong> matches</span>
-            <span><strong>3</strong> host nations</span>
-          </div>
-          <Link to="/?tab=worldcup" className="home-spotlight__link">
-            Open tournament hub
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6" />
-            </svg>
-          </Link>
-        </aside>
       </div>
     </section>
   );
