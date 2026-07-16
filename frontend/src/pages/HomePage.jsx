@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
-// HomePage — Immersive stadium + grass scene matching the reference mockup
+// HomePage — cinematic live-sports landing experience.
 // ---------------------------------------------------------------------------
-import { useEffect, useState, useRef, lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { apiGet } from '../lib/config.js';
 import ChannelCard from '../components/ChannelCard.jsx';
@@ -27,9 +27,125 @@ const MAIN_TABS = [
 
 const PRIMARY_CATEGORIES = ['All', 'Sports', 'Live', 'News', 'Entertainment'];
 
-function HomeContent({
-  activeTab,
-  setActiveTab,
+function TrophyIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 4h8v4a4 4 0 0 1-8 0V4Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 6H5v1a4 4 0 0 0 4 4m7-5h3v1a4 4 0 0 1-4 4M12 12v4m-3 4h6m-5-4h4" />
+    </svg>
+  );
+}
+
+function PlayIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 5.7v12.6a1 1 0 0 0 1.54.84l9.8-6.3a1 1 0 0 0 0-1.68l-9.8-6.3A1 1 0 0 0 8 5.7Z" />
+    </svg>
+  );
+}
+
+function HomeHero() {
+  return (
+    <section className="home-hero" aria-labelledby="home-hero-title">
+      <div className="home-hero__inner">
+        <div className="home-hero__copy">
+          <div className="home-hero__eyebrow animate-hero-in">
+            <span className="home-hero__live-dot" aria-hidden="true" />
+            The world’s game, live now
+          </div>
+
+          <h1 id="home-hero-title" className="home-hero__title animate-hero-in">
+            Every match.
+            <span>One stadium.</span>
+          </h1>
+
+          <p className="home-hero__description animate-hero-in">
+            Watch live football, follow real-time scores, and join the biggest
+            moments from one beautifully simple sports hub.
+          </p>
+
+          <div className="home-hero__actions animate-hero-in">
+            <Link to="/?tab=worldcup" className="btn-hero-primary">
+              <TrophyIcon />
+              Explore World Cup
+            </Link>
+            <Link to="/category/Sports" viewTransition className="btn-hero-secondary">
+              <PlayIcon />
+              Watch live sports
+            </Link>
+          </div>
+
+          <dl className="home-hero__proof animate-hero-in" aria-label="Platform highlights">
+            <div>
+              <dt>Live channels</dt>
+              <dd>50+</dd>
+            </div>
+            <div>
+              <dt>Match updates</dt>
+              <dd>Real-time</dd>
+            </div>
+            <div>
+              <dt>Watch parties</dt>
+              <dd>Together</dd>
+            </div>
+          </dl>
+        </div>
+
+        <aside className="home-spotlight animate-hero-in" aria-label="Featured tournament">
+          <div className="home-spotlight__topline">
+            <span className="home-spotlight__icon"><TrophyIcon /></span>
+            <span>Featured tournament</span>
+            <span className="home-spotlight__live"><i /> Live</span>
+          </div>
+          <p className="home-spotlight__kicker">FIFA World Cup 2026</p>
+          <h2>World football has one home.</h2>
+          <p className="home-spotlight__copy">
+            Fixtures, live channels, group standings, and local kickoff times — all in one place.
+          </p>
+          <div className="home-spotlight__meta">
+            <span><strong>48</strong> teams</span>
+            <span><strong>104</strong> matches</span>
+            <span><strong>3</strong> host nations</span>
+          </div>
+          <Link to="/?tab=worldcup" className="home-spotlight__link">
+            Open tournament hub
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6" />
+            </svg>
+          </Link>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function HomeTabs({ activeTab, setActiveTab }) {
+  return (
+    <div className="home-tabs-wrap">
+      <span className="home-tabs__label">Explore</span>
+      <div className="home-tabs no-scrollbar" role="tablist" aria-label="Homepage sections">
+        {MAIN_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            id={`home-tab-${tab.id}`}
+            type="button"
+            role="tab"
+            data-haptic="selection"
+            data-haptic-tab="1"
+            aria-selected={activeTab === tab.id}
+            aria-controls={`home-panel-${tab.id}`}
+            onClick={() => setActiveTab(tab.id)}
+            className={`home-tabs__btn ${activeTab === tab.id ? 'is-active' : ''}`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ChannelsPanel({
   activeGroup,
   setActiveGroup,
   search,
@@ -42,193 +158,180 @@ function HomeContent({
   featured,
 }) {
   return (
-    <>
-      <section className="home-hero">
-        <div className="home-hero__content">
-          <h1 className="type-display text-3xl text-white drop-shadow-lg sm:text-5xl md:text-6xl">
-            Live Sports{' '}
-            <span className="hero-gradient-text">Streaming</span>
-          </h1>
-          <p className="type-body mt-3 text-slate-100/90 max-w-md mx-auto sm:mt-4 sm:text-lg drop-shadow">
-            Your home for live sports, anytime, anywhere.
-          </p>
-          <div className="home-hero__actions">
-            <Link to="/?tab=worldcup" className="btn-hero-primary">
-              <span aria-hidden="true">🏆</span>
-              FIFA World Cup
-            </Link>
-            <Link to="/category/Sports" viewTransition className="btn-hero-secondary">
-              <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-              Watch Sports
-            </Link>
-          </div>
-        </div>
-      </section>
+    <div className="home-section-stack animate-fadeIn">
+      <div className="channel-filter-row no-scrollbar" aria-label="Channel categories">
+        {PRIMARY_CATEGORIES.map((category) => (
+          <button
+            key={category}
+            type="button"
+            onClick={() => setActiveGroup(category)}
+            className={`channel-filter ${activeGroup === category ? 'is-active' : ''}`}
+          >
+            {category}
+          </button>
+        ))}
+      </div>
 
-      <section className="home-pitch">
-        <div className="home-pitch__inner">
-          <div className="home-tabs no-scrollbar" role="tablist">
-            {MAIN_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                data-haptic="selection"
-                data-haptic-tab="1"
-                aria-selected={activeTab === tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`home-tabs__btn ${activeTab === tab.id ? 'is-active' : ''}`}
-              >
-                {tab.label}
-              </button>
+      <div className="channel-tools">
+        <div className="channel-search" ref={searchRef}>
+          <svg className="channel-search__icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35m1.35-5.15a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z" />
+          </svg>
+          <input
+            type="search"
+            placeholder="Search live channels"
+            value={search}
+            onChange={(event) => {
+              const nextSearch = event.target.value;
+              setSearch(nextSearch);
+              setShowSuggestions(nextSearch.trim().length >= 2);
+            }}
+            onFocus={() => search.trim().length >= 2 && setShowSuggestions(true)}
+            aria-label="Search channels"
+          />
+          {showSuggestions && searchSuggestions.length > 0 && (
+            <div className="channel-search__suggestions">
+              {searchSuggestions.map((channel) => (
+                <Link
+                  key={channel.url || channel.name}
+                  to={`/watch?url=${encodeURIComponent(channel.url)}&name=${encodeURIComponent(channel.name)}&logo=${encodeURIComponent(channel.logo || '')}`}
+                  viewTransition
+                  onPointerDown={() => armChannelMediaTransition(channel.url)}
+                  onClick={() => setShowSuggestions(false)}
+                >
+                  <span>{channel.name}</span>
+                  <small>{channel.group?.replace('Z_', '')}</small>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+        <span className="channel-count">
+          <i aria-hidden="true" />
+          {filteredChannels.length} channels available
+        </span>
+      </div>
+
+      {activeGroup === 'All' && !search && featured.length > 0 && (
+        <section>
+          <div className="section-heading-row">
+            <div>
+              <p>Curated for you</p>
+              <h2>Featured channels</h2>
+            </div>
+            <span>Live now</span>
+          </div>
+          <div className="channel-grid">
+            {featured.slice(0, 4).map((channel) => (
+              <ChannelCard key={channel.url || channel.name} channel={channel} featured pitch />
             ))}
           </div>
+        </section>
+      )}
 
-          {activeTab === 'channels' && (
-            <div className="home-section-stack animate-fadeIn">
-              <div className="-mx-1 flex justify-center sm:mx-0">
-                <div className="flex items-center gap-2 overflow-x-auto rounded-xl border border-white/10 bg-black/30 px-2.5 py-2.5 no-scrollbar sm:inline-flex sm:gap-3 sm:px-4 sm:py-3 backdrop-blur-sm">
-                  {PRIMARY_CATEGORIES.map((cat) => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setActiveGroup(cat)}
-                      className={`shrink-0 min-h-[44px] whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all sm:px-5 sm:py-2 sm:text-sm ${
-                        activeGroup === cat
-                          ? 'bg-[var(--brand-purple)] text-white shadow-md shadow-[var(--brand-purple)]/25'
-                          : 'text-slate-200 hover:text-white hover:bg-white/10'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="relative flex-1 max-w-sm" ref={searchRef}>
-                  <svg className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <input
-                    type="search"
-                    placeholder="Search channels..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    onFocus={() => search.length >= 2 && setShowSuggestions(true)}
-                    aria-label="Search channels"
-                    className="w-full rounded-xl border border-white/10 bg-black/40 py-3 pl-11 pr-4 text-sm text-white outline-none placeholder:text-slate-400 focus:border-[var(--brand-purple)] focus:ring-2 focus:ring-[var(--brand-purple)]/25 backdrop-blur-sm"
-                  />
-                  {showSuggestions && (
-                    <div className="absolute top-full left-0 right-0 z-[var(--z-dropdown)] mt-2 rounded-xl border border-white/10 bg-[var(--bg-secondary)] shadow-xl overflow-hidden">
-                      {searchSuggestions.map((ch) => (
-                        <Link
-                          key={ch.url || ch.name}
-                          to={`/watch?url=${encodeURIComponent(ch.url)}&name=${encodeURIComponent(ch.name)}&logo=${encodeURIComponent(ch.logo || '')}`}
-                          viewTransition
-                          onPointerDown={() => armChannelMediaTransition(ch.url)}
-                          onClick={() => setShowSuggestions(false)}
-                          className="flex w-full min-h-[44px] items-center gap-3 px-4 py-3 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
-                        >
-                          <span className="flex-1 truncate">{ch.name}</span>
-                          <span className="type-caption text-[var(--text-muted)]">{ch.group?.replace('Z_', '')}</span>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <span className="type-body text-slate-200">
-                  {filteredChannels.length} channels
-                </span>
-              </div>
-
-              {activeGroup === 'All' && !search && featured.length > 0 && (
-                <section>
-                  <h2 className="type-h2 mb-3 text-white drop-shadow">
-                    Featured Channels
-                  </h2>
-                  <div className="channel-grid">
-                    {featured.slice(0, 4).map((ch) => (
-                      <ChannelCard key={ch.url || ch.name} channel={ch} featured pitch />
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              <section>
-                <h2 className="type-h2 mb-3 text-white drop-shadow">
-                  {activeGroup === 'All' ? 'All Channels' : activeGroup}
-                </h2>
-                {filteredChannels.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <svg className="h-14 w-14 text-slate-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    <p className="type-body text-slate-200">No channels found</p>
-                    <button
-                      type="button"
-                      onClick={() => { setSearch(''); setActiveGroup('All'); }}
-                      className="mt-4 min-h-[44px] text-sm font-semibold text-[var(--brand-purple-light)] hover:underline"
-                    >
-                      Clear filters
-                    </button>
-                  </div>
-                ) : (
-                  <div className="channel-grid">
-                    {filteredChannels.map((ch) => (
-                      <ChannelCard key={ch.url || ch.name} channel={ch} pitch />
-                    ))}
-                  </div>
-                )}
-              </section>
-
-              {activeGroup === 'All' && !search && filteredChannels.length > 12 && (
-                <div className="flex justify-center pt-4">
-                  <Link
-                    to="/category/Sports"
-                    viewTransition
-                    className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-white/15 bg-black/40 px-8 py-3 text-sm font-bold text-slate-100 transition-all hover:border-[var(--brand-purple)]/40 hover:text-white backdrop-blur-sm"
-                  >
-                    View All Channels
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'worldcup' && (
-            <div className="animate-fadeIn text-white">
-              <Suspense fallback={<WorldCupSectionSkeleton />}>
-                <WorldCupSection pitch />
-              </Suspense>
-            </div>
-          )}
-
-          {activeTab === 'scores' && (
-            <div className="animate-fadeIn">
-              <Suspense fallback={<ScoresSectionSkeleton />}>
-                <LiveScoresSection />
-              </Suspense>
-            </div>
-          )}
-
-          {activeTab === 'predict' && (
-            <div className="animate-fadeIn text-white">
-              <Suspense fallback={<PredictionSectionSkeleton />}>
-                <PredictionLeaderboard pitch />
-              </Suspense>
-            </div>
-          )}
-
-          <div className="h-2" />
+      <section>
+        <div className="section-heading-row">
+          <div>
+            <p>Browse the lineup</p>
+            <h2>{activeGroup === 'All' ? 'All channels' : activeGroup}</h2>
+          </div>
         </div>
+
+        {filteredChannels.length === 0 ? (
+          <div className="channel-empty-state">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="m21 21-4.35-4.35m1.35-5.15a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z" />
+            </svg>
+            <h3>No channels found</h3>
+            <p>Try another name or clear your active filters.</p>
+            <button type="button" onClick={() => { setSearch(''); setActiveGroup('All'); }}>
+              Clear filters
+            </button>
+          </div>
+        ) : (
+          <div className="channel-grid">
+            {filteredChannels.map((channel) => (
+              <ChannelCard key={channel.url || channel.name} channel={channel} pitch />
+            ))}
+          </div>
+        )}
       </section>
-    </>
+
+      {activeGroup === 'All' && !search && filteredChannels.length > 12 && (
+        <div className="home-view-all">
+          <Link to="/category/Sports" viewTransition>
+            View all sports channels
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6" />
+            </svg>
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HomeContent(props) {
+  const { activeTab, setActiveTab } = props;
+
+  return (
+    <section className="home-pitch" aria-label="Sports content">
+      <div className="home-pitch__inner">
+        <div className="home-content-panel">
+          <HomeTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+
+          <div
+            id={`home-panel-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`home-tab-${activeTab}`}
+            className="home-content-panel__body"
+          >
+            {activeTab === 'channels' && <ChannelsPanel {...props} />}
+
+            {activeTab === 'worldcup' && (
+              <div className="animate-fadeIn text-white">
+                <Suspense fallback={<WorldCupSectionSkeleton />}>
+                  <WorldCupSection pitch />
+                </Suspense>
+              </div>
+            )}
+
+            {activeTab === 'scores' && (
+              <div className="animate-fadeIn">
+                <Suspense fallback={<ScoresSectionSkeleton />}>
+                  <LiveScoresSection />
+                </Suspense>
+              </div>
+            )}
+
+            {activeTab === 'predict' && (
+              <div className="animate-fadeIn text-white">
+                <Suspense fallback={<PredictionSectionSkeleton />}>
+                  <PredictionLeaderboard pitch />
+                </Suspense>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HomeLoading() {
+  return (
+    <section className="home-pitch" aria-label="Loading sports content">
+      <div className="home-pitch__inner">
+        <div className="home-content-panel home-content-panel--loading">
+          <div className="flex gap-2 overflow-hidden">
+            {[1, 2, 3, 4].map((item) => (
+              <div key={item} className="skeleton h-11 w-24 shrink-0 rounded-full" />
+            ))}
+          </div>
+          <ChannelGridSkeleton count={8} pitch />
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -237,33 +340,38 @@ export default function HomePage() {
   const [channels, setChannels] = useState([]);
   const [featured, setFeatured] = useState([]);
   const [activeGroup, setActiveGroup] = useState('All');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('q') || '');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchRef = useRef(null);
 
   const tabParam = searchParams.get('tab');
-  const activeTab = MAIN_TABS.some((t) => t.id === tabParam) ? tabParam : 'worldcup';
+  const activeTab = MAIN_TABS.some((tab) => tab.id === tabParam) ? tabParam : 'worldcup';
 
   const setActiveTab = (tabId) => {
-    setSearchParams({ tab: tabId }, { replace: true });
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('tab', tabId);
+    setSearchParams(nextParams, { replace: true });
   };
 
   useEffect(() => {
     if (!tabParam) {
-      setSearchParams({ tab: 'worldcup' }, { replace: true });
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set('tab', 'worldcup');
+      setSearchParams(nextParams, { replace: true });
     }
-  }, [tabParam, setSearchParams]);
+  }, [searchParams, setSearchParams, tabParam]);
 
   useEffect(() => {
     let alive = true;
+
     const loadChannels = ({ silent = false } = {}) => {
       if (!silent) {
         setLoading(true);
         setError(null);
       }
+
       return Promise.all([
         apiGet('/api/channels'),
         apiGet('/api/channels/featured'),
@@ -275,10 +383,9 @@ export default function HomePage() {
           setFeatured(featuredData.channels || []);
           setError(null);
         })
-        .catch((err) => {
-          console.error('Failed to load channels:', err);
-          if (!alive) return;
-          if (!silent) {
+        .catch((loadError) => {
+          console.error('Failed to load channels:', loadError);
+          if (alive && !silent) {
             setError('Could not load channels. Please check your connection and try again.');
           }
         })
@@ -290,6 +397,7 @@ export default function HomePage() {
     loadChannels();
     const onPull = () => loadChannels({ silent: true });
     window.addEventListener('bgc:pull-refresh', onPull);
+
     return () => {
       alive = false;
       window.removeEventListener('bgc:pull-refresh', onPull);
@@ -297,85 +405,64 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!search.trim() || search.length < 2) {
-      setSearchSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-    const q = search.toLowerCase();
-    const matches = channels
-      .filter((ch) => ch.name && ch.name.toLowerCase().includes(q))
-      .slice(0, 6);
-    setSearchSuggestions(matches);
-    setShowSuggestions(matches.length > 0);
-  }, [search, channels]);
-
-  useEffect(() => {
-    const handler = (e) => {
-      if (searchRef.current && !searchRef.current.contains(e.target)) {
+    const closeSuggestions = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
         setShowSuggestions(false);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+
+    document.addEventListener('pointerdown', closeSuggestions);
+    return () => document.removeEventListener('pointerdown', closeSuggestions);
   }, []);
 
-  const filteredChannels = channels.filter((ch) => {
-    let matchGroup = true;
-    if (activeGroup !== 'All') {
-      if (activeGroup === 'Entertainment') {
-        matchGroup = ch.group && (
-          ch.group.toLowerCase().includes('movies')
-          || ch.group.toLowerCase().includes('music')
-          || ch.group.toLowerCase().includes('entertainment')
-        );
-      } else {
-        matchGroup = ch.group && ch.group.toLowerCase().includes(activeGroup.toLowerCase());
-      }
-    }
-    const matchSearch =
-      !search
-      || (ch.name && ch.name.toLowerCase().includes(search.toLowerCase()))
-      || (ch.group && ch.group.toLowerCase().includes(search.toLowerCase()));
-    return matchGroup && matchSearch;
-  });
+  const searchSuggestions = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (query.length < 2) return [];
+    return channels
+      .filter((channel) => channel.name?.toLowerCase().includes(query))
+      .slice(0, 6);
+  }, [channels, search]);
 
-  if (error) {
-    return (
-      <StadiumGrassScene>
-        <div className="page-container flex min-h-[50vh] flex-col items-center justify-center text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10 ring-1 ring-red-500/20 mb-4">
-            <svg className="h-7 w-7 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-          </div>
-          <h2 className="type-h2 text-white">Unable to load channels</h2>
-          <p className="type-body mt-2 max-w-md text-slate-200">{error}</p>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="mt-6 inline-flex min-h-[44px] items-center rounded-xl bg-[var(--accent)] px-6 py-2.5 text-sm font-bold text-white"
-          >
-            Retry
-          </button>
-        </div>
-      </StadiumGrassScene>
-    );
-  }
+  const filteredChannels = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return channels.filter((channel) => {
+      let matchesGroup = true;
+      const group = channel.group?.toLowerCase() || '';
+
+      if (activeGroup !== 'All') {
+        if (activeGroup === 'Entertainment') {
+          matchesGroup = ['movies', 'music', 'entertainment'].some((term) => group.includes(term));
+        } else {
+          matchesGroup = group.includes(activeGroup.toLowerCase());
+        }
+      }
+
+      const matchesSearch = !query
+        || channel.name?.toLowerCase().includes(query)
+        || group.includes(query);
+
+      return matchesGroup && matchesSearch;
+    });
+  }, [activeGroup, channels, search]);
 
   return (
     <StadiumGrassScene>
-      {loading ? (
-        <div className="home-pitch">
-          <div className="home-pitch__inner space-y-4">
-            <div className="flex justify-center gap-2">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="skeleton h-9 w-20 rounded-full" />
-              ))}
-            </div>
-            <ChannelGridSkeleton count={8} pitch />
+      <HomeHero />
+
+      {error ? (
+        <section className="home-error" role="alert">
+          <div className="home-error__icon">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 9v3m0 4h.01M4.9 19h14.2a2 2 0 0 0 1.73-3L13.73 4a2 2 0 0 0-3.46 0L3.17 16A2 2 0 0 0 4.9 19Z" />
+            </svg>
           </div>
-        </div>
+          <h2>Unable to load channels</h2>
+          <p>{error}</p>
+          <button type="button" onClick={() => window.location.reload()}>Try again</button>
+        </section>
+      ) : loading ? (
+        <HomeLoading />
       ) : (
         <HomeContent
           activeTab={activeTab}

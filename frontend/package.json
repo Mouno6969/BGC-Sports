@@ -9,8 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@emoji-mart/data": "^1.2.1",
-    "@emoji-mart/react": "^1.1.1",
     "@sentry/react": "^10.65.0",
     "framer-motion": "^12.42.0",
     "hls.js": "^1.5.13",

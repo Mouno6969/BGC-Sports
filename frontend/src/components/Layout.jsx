@@ -246,7 +246,7 @@ export default function Layout() {
             </span>
           </Link>
 
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Main navigation">
+          <nav className="hidden items-center gap-0.5 xl:flex" aria-label="Main navigation">
             {NAV_LINKS.map((link) => {
               const active = isNavActive(link, location, tab);
               return (
@@ -321,7 +321,7 @@ export default function Layout() {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-[var(--text-secondary)] md:hidden"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-[var(--text-secondary)] xl:hidden"
               aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
               aria-expanded={mobileMenuOpen}
             >
@@ -339,7 +339,7 @@ export default function Layout() {
         </div>
 
         {mobileMenuOpen && (
-          <nav className="border-t border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-3 md:hidden" aria-label="Mobile menu">
+          <nav className="border-t border-white/10 bg-[#070a12]/95 px-4 py-3 backdrop-blur-xl xl:hidden" aria-label="Mobile menu">
             <div className="flex flex-col gap-1">
               {NAV_LINKS.map((link) => {
                 const active = isNavActive(link, location, tab);
