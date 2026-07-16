@@ -2,7 +2,7 @@
 // Public API routes:
 //   GET  /api/health        -> service health + feature flags
 //   GET  /api/stream        -> current global stream config (public)
-//   GET  /api/toffee/channels -> Toffee live channels with required headers
+//   GET  /api/toffee/channels -> disabled (empty)
 //   POST /api/livekit/token -> mint a LiveKit access token for a room
 // ---------------------------------------------------------------------------
 
@@ -12,8 +12,12 @@ import { config, isLiveKitConfigured } from '../config/index.js';
 import { getStream } from '../utils/streamStore.js';
 import { roomStore } from '../utils/roomStore.js';
 import { sanitizeUsername } from '../utils/identity.js';
-import { fetchToffeeChannels, refreshToffeeChannels } from '../utils/toffeeService.js';
-import { fetchLiveFifaChannels, getFifaChannelsByProvider } from '../utils/fifaService.js';
+import {
+  fetchLiveFifaChannels,
+  getFifaChannelsByProvider,
+  getInstantFifaChannels,
+} from '../utils/fifaService.js';
+import { getIptvOrgStatus } from '../utils/iptvOrgService.js';
 import { createToffeeSession, getToffeeSession } from '../toffee/sessionStore.js';
 
 const router = Router();
@@ -25,7 +29,7 @@ router.get('/health', (req, res) => {
     livekitEnabled: isLiveKitConfigured(),
     livekitUrl: isLiveKitConfigured() ? config.livekit.url : null,
     maxParticipants: config.maxParticipantsPerRoom,
-    toffeeEnabled: true,
+    toffeeEnabled: false,
   });
 });
 
@@ -53,37 +57,58 @@ router.get('/toffee/session/:sessionId', (req, res) => {
 });
 
 router.get('/fifa/channels', async (req, res) => {
+  // Always respond quickly — probing/iptv-org runs in the background.
+  // Never let this handler hang the World Cup tab.
+  const started = Date.now();
   try {
-    const channels = await fetchLiveFifaChannels({ refresh: req.query.refresh === '1' });
+    const channels = await Promise.race([
+      fetchLiveFifaChannels({ refresh: req.query.refresh === '1' }),
+      // Safety net: if anything blocks, fall through after 2.5s
+      new Promise((resolve) => setTimeout(() => resolve(null), 2500)),
+    ]);
+
+    let list = channels;
+    if (!list || !list.length) {
+      list = getInstantFifaChannels();
+    }
+
     res.json({
       ok: true,
-      count: channels.length,
-      channels,
-      groups: getFifaChannelsByProvider(channels),
-      note: 'FIFA streams are proxied server-side — no setup required',
+      count: list.length,
+      channels: list,
+      groups: getFifaChannelsByProvider(list),
+      sources: {
+        iptvOrg: getIptvOrgStatus(),
+      },
+      ms: Date.now() - started,
+      note: 'Streams are proxied on-site. Catalog returns instantly; health probes run in background.',
     });
   } catch (error) {
     console.error('[fifa] API error:', error);
-    res.status(500).json({ ok: false, error: 'Failed to load FIFA channels' });
+    try {
+      const list = getInstantFifaChannels();
+      return res.json({
+        ok: true,
+        count: list.length,
+        channels: list,
+        groups: getFifaChannelsByProvider(list),
+        fallback: true,
+      });
+    } catch {
+      res.status(500).json({ ok: false, error: 'Failed to load FIFA channels' });
+    }
   }
 });
 
-// Toffee channels - returns channels + the exact headers needed for playback
-router.get('/toffee/channels', async (req, res) => {
-  try {
-    const channels = req.query.refresh === '1'
-      ? await refreshToffeeChannels()
-      : await fetchToffeeChannels();
-    res.json({ 
-      ok: true, 
-      count: channels.length,
-      channels,
-      note: 'Pass the "headers" object to Hls.js via config.xhrSetup when playing these streams'
-    });
-  } catch (error) {
-    console.error('[toffee] API error:', error);
-    res.status(500).json({ ok: false, error: 'Failed to load Toffee channels' });
-  }
+// Toffee channels — disabled (CDN geo-blocked / unreliable for this deployment)
+router.get('/toffee/channels', async (_req, res) => {
+  res.json({
+    ok: true,
+    count: 0,
+    channels: [],
+    disabled: true,
+    note: 'Toffee channels are disabled. Streams require Bangladesh CDN access and are currently offline.',
+  });
 });
 
 // Mint a LiveKit token for a participant joining a room's video call.

@@ -8,7 +8,7 @@
 //
 // Events (client -> server):
 //   ai:join     { username, avatar }        -> join room, receive history
-//   ai:message  { text, replyTo? }          -> post a question to the AI
+//   ai:message  { text, replyTo?, image? }  -> post a question (optional image)
 //   ai:reaction { messageId, emoji }        -> toggle a reaction (1/user/msg)
 //
 // Events (server -> client):
@@ -34,6 +34,31 @@ import { AI_BOT } from './aiChat.js';
 const AI_CHANNEL = 'ai-chatroom';
 const HISTORY_LIMIT = 150;
 const MAX_MESSAGE_LEN = 500;
+/** Max raw base64 chars (~3MB binary after decode) for socket image payloads */
+const MAX_IMAGE_DATA_URL_LEN = 4_500_000;
+
+function sanitizeImagePayload(raw) {
+  if (!raw) return null;
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    if (!s.startsWith('data:image/')) return null;
+    if (s.length > MAX_IMAGE_DATA_URL_LEN) return null;
+    return { dataUrl: s };
+  }
+  if (typeof raw === 'object') {
+    const dataUrl = raw.dataUrl || raw.url || '';
+    if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
+      if (dataUrl.length > MAX_IMAGE_DATA_URL_LEN) return null;
+      return { dataUrl };
+    }
+    const base64 = String(raw.base64 || '').replace(/\s/g, '');
+    const mime = String(raw.mime || 'image/jpeg').slice(0, 40);
+    if (!base64 || !mime.startsWith('image/')) return null;
+    if (base64.length > MAX_IMAGE_DATA_URL_LEN) return null;
+    return { dataUrl: `data:${mime};base64,${base64}`, mime };
+  }
+  return null;
+}
 
 // Shared in-memory conversation history (visible to everyone who joins).
 const history = [];
@@ -141,7 +166,8 @@ export function registerAiRoomHandlers(io, socket) {
       .replace(/[<>]/g, '')
       .trim()
       .slice(0, MAX_MESSAGE_LEN);
-    if (!text) return;
+    const image = sanitizeImagePayload(payload.image);
+    if (!text && !image) return;
 
     // 1. Broadcast the user's question so everyone sees the conversation.
     const userMsg = {
@@ -149,7 +175,11 @@ export function registerAiRoomHandlers(io, socket) {
       username,
       color,
       avatar: avatar || '',
-      text,
+      text: text || (image ? '📷 Photo' : ''),
+      // Store a compact flag for history; full dataUrl only for AI call (not re-broadcast at full size if huge)
+      image: image?.dataUrl
+        ? { dataUrl: image.dataUrl, thumb: true }
+        : null,
       ts: Date.now(),
       reactions: {},
       replyTo: buildReplySnippet(payload.replyTo),
@@ -157,21 +187,38 @@ export function registerAiRoomHandlers(io, socket) {
     pushHistory(userMsg);
     io.to(AI_CHANNEL).emit('ai:message', userMsg);
 
-    // 2. Show the AI typing indicator to the whole room.
-    io.to(AI_CHANNEL).emit('ai:typing', {
-      username: AI_BOT.username,
-      isTyping: true,
-    });
-
-    // 3. Ask the AI. In this room no @bgc prefix is needed — every message
-    //    is a query. processQuery strips @bgc if present.
-    try {
-      const result = await processQuery(text, `ai-room:${username}`, username);
-
+    // 2–3. Phase indicators: searching first, then typing/thinking, then idle.
+    // Frontend shows "Searching…" then a typing indicator — never tool names.
+    const emitPhase = (phase) => {
+      if (phase === 'idle') {
+        io.to(AI_CHANNEL).emit('ai:typing', {
+          username: AI_BOT.username,
+          isTyping: false,
+          phase: 'idle',
+        });
+        return;
+      }
       io.to(AI_CHANNEL).emit('ai:typing', {
         username: AI_BOT.username,
-        isTyping: false,
+        isTyping: true,
+        phase, // 'searching' | 'thinking' | 'planning' | 'verifying'
       });
+    };
+
+    // Ask the AI. In this room no @bgc prefix is needed — every message
+    // is a query. processQuery strips @bgc if present. Images use ZenMux vision.
+    try {
+      const result = await processQuery(
+        text || 'What is in this image? Describe any sports scores, teams, or details you see.',
+        `ai-room:${username}`,
+        username,
+        {
+          onPhase: emitPhase,
+          image: image || undefined,
+        }
+      );
+
+      emitPhase('idle');
 
       const responseText =
         result.success && result.response
@@ -199,10 +246,7 @@ export function registerAiRoomHandlers(io, socket) {
       io.to(AI_CHANNEL).emit('ai:message', aiMsg);
     } catch (err) {
       console.error('[AI-Room] Error processing query:', err);
-      io.to(AI_CHANNEL).emit('ai:typing', {
-        username: AI_BOT.username,
-        isTyping: false,
-      });
+      emitPhase('idle');
       const errMsg = {
         id: nanoid(),
         username: AI_BOT.username,

@@ -34,6 +34,10 @@ import hlsProxyRoute from './routes/hlsProxy.js';
 import scoresRoute from './routes/scores.js';
 import aiRoute from './routes/ai.js';
 import gifsRoute from './routes/gifs.js';
+import clientErrorsRoute from './routes/clientErrors.js';
+import predictionsRoute, { startPredictionSettler } from './routes/predictions.js';
+import profileRoute from './routes/profile.js';
+import matchRoute from './routes/match.js';
 import { registerChatHandlers } from './sockets/chat.js';
 import { registerRoomHandlers } from './sockets/room.js';
 import { registerCallHandlers } from './sockets/call.js';
@@ -76,13 +80,26 @@ app.use('/api/hls-proxy', hlsProxyRoute);
 app.use('/api/scores', scoresRoute);
 app.use('/api/ai', aiRoute);
 app.use('/api/gifs', gifsRoute);
+app.use('/api/errors', clientErrorsRoute);
+app.use('/api/predictions', predictionsRoute);
+app.use('/api/profile', profileRoute);
+app.use('/api/match', matchRoute);
 
 if (serveFrontend) {
-  app.use(express.static(frontendDist));
+  app.use(
+    express.static(frontendDist, {
+      setHeaders(res, filePath) {
+        if (filePath.endsWith('index.html') || filePath.endsWith('sw.js')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+      },
+    }),
+  );
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
       return next();
     }
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(frontendDist, 'index.html'));
   });
 }
@@ -131,8 +148,10 @@ server.listen(config.port, () => {
   console.log(' Private Rooms: ENABLED (group chat + video/audio call)');
   console.log(' Host Controls: kick, force-mute, lock, end-call, transfer-host');
   console.log(' BGC AI Agent: ENABLED (@bgc mention in any chat)');
+  console.log(' Predictions: leaderboard + auto-settle enabled');
   if (serveFrontend) {
     console.log(` Frontend: serving ${frontendDist}`);
   }
   console.log('-----------------------------------------------------------');
+  startPredictionSettler();
 });

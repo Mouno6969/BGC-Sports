@@ -9,6 +9,8 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return;
+          // Keep Sentry out of react-vendor; loaded only when VITE_SENTRY_DSN is set
+          if (id.includes('@sentry')) return 'sentry';
           if (id.includes('hls.js')) return 'hls';
           if (id.includes('framer-motion')) return 'motion';
           if (id.includes('socket.io-client')) return 'socket';

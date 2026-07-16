@@ -53,6 +53,19 @@ function shouldRewriteToClientProxy(url) {
   return url.toLowerCase().includes('toffeelive.com');
 }
 
+function withHardTimeout(promise, ms, label = 'toffee') {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        const err = new Error(`${label} timed out after ${ms}ms`);
+        err.code = 'TIMEOUT';
+        reject(err);
+      }, ms);
+    }),
+  ]);
+}
+
 router.get('/manifest', async (req, res) => {
   const { url, sid } = req.query;
   if (!url) return res.status(400).send('Missing url');
@@ -62,11 +75,15 @@ router.get('/manifest', async (req, res) => {
   const baseProxyUrl = getBaseProxyUrl(req);
 
   try {
-    const result = await fetchToffeeResource({
-      url,
-      headers,
-      expect: 'manifest',
-    });
+    const result = await withHardTimeout(
+      fetchToffeeResource({
+        url,
+        headers,
+        expect: 'manifest',
+      }),
+      28_000,
+      'toffee-manifest'
+    );
 
     const baseUrl = url.substring(0, url.lastIndexOf('/') + 1);
     const rewritten = rewriteManifest(result.body, baseUrl, (absoluteUrl) => {
@@ -82,12 +99,12 @@ router.get('/manifest', async (req, res) => {
     res.set('X-Toffee-Request-Id', result.requestId);
     res.send(rewritten);
   } catch (error) {
-    const status = mapPipelineErrorToStatus(error);
+    const status = error.code === 'TIMEOUT' ? 504 : mapPipelineErrorToStatus(error);
     console.error('[toffee-proxy] manifest error:', error.code || error.message);
     if (error instanceof ToffeeRequestError) {
       return res.status(status).json({ ok: false, code: error.code, error: error.message });
     }
-    return res.status(502).send('Failed to fetch manifest');
+    return res.status(status).send(error.message || 'Failed to fetch manifest');
   }
 });
 
@@ -99,11 +116,15 @@ router.get('/segment', async (req, res) => {
   const headers = buildUpstreamHeaders(channel?.headers || {}, req, url);
 
   try {
-    const result = await fetchToffeeResource({
-      url,
-      headers,
-      expect: 'binary',
-    });
+    const result = await withHardTimeout(
+      fetchToffeeResource({
+        url,
+        headers,
+        expect: 'binary',
+      }),
+      22_000,
+      'toffee-segment'
+    );
 
     if (result.contentType) res.set('Content-Type', result.contentType);
     res.set('Access-Control-Allow-Origin', '*');
@@ -111,7 +132,7 @@ router.get('/segment', async (req, res) => {
     res.set('X-Toffee-Request-Id', result.requestId);
     res.send(result.body);
   } catch (error) {
-    const status = mapPipelineErrorToStatus(error);
+    const status = error.code === 'TIMEOUT' ? 504 : mapPipelineErrorToStatus(error);
     console.error('[toffee-proxy] segment error:', error.code || error.message);
     return res.status(status).send(error.message || 'Failed to fetch segment');
   }

@@ -30,13 +30,24 @@ function isHlsTagLine(line) {
 function isStreamUrlLine(line) {
   if (!line || isHlsTagLine(line)) return false;
   if (line.startsWith('{') || line.startsWith('[') || line.includes('"playbakcs_url"')) return false;
+  // Absolute URLs, relative playlist/segment paths, and disguised TS (.jpg/.png/bin)
   return (
     line.startsWith('http://')
     || line.startsWith('https://')
+    || line.startsWith('/')
     || line.endsWith('.m3u8')
     || line.endsWith('.ts')
+    || line.endsWith('.m4s')
+    || line.endsWith('.jpg')
+    || line.endsWith('.jpeg')
+    || line.endsWith('.png')
+    || line.endsWith('.bin')
     || line.includes('.m3u8?')
     || line.includes('.ts?')
+    || line.includes('tracks-')
+    || line.includes('chunklist')
+    || line.includes('media_')
+    || line.includes('mono.m3u8')
   );
 }
 

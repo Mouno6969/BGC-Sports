@@ -60,21 +60,29 @@ export function setupPublicChatAI(io, pushHistory) {
 
     processingMessages.add(msg.id);
 
-    try {
-      // Show typing indicator
+    const emitPhase = (phase) => {
+      if (phase === 'idle') {
+        io.to(PUBLIC_CHANNEL).emit('chat:typing', {
+          username: AI_BOT.username,
+          isTyping: false,
+          phase: 'idle',
+        });
+        return;
+      }
+      // phase: 'searching' then 'thinking' — UI shows search indicator first
       io.to(PUBLIC_CHANNEL).emit('chat:typing', {
         username: AI_BOT.username,
         isTyping: true,
+        phase,
+      });
+    };
+
+    try {
+      const result = await processQuery(msg.text, msg.username, msg.username, {
+        onPhase: emitPhase,
       });
 
-      // Process the query
-      const result = await processQuery(msg.text, msg.username, msg.username);
-
-      // Stop typing indicator
-      io.to(PUBLIC_CHANNEL).emit('chat:typing', {
-        username: AI_BOT.username,
-        isTyping: false,
-      });
+      emitPhase('idle');
 
       if (result.success && result.response) {
         const aiMsg = createAIMessage(result.response, msg.username);
@@ -87,11 +95,7 @@ export function setupPublicChatAI(io, pushHistory) {
       }
     } catch (err) {
       console.error('[AI-Chat] Error in public chat AI:', err);
-      // Stop typing on error
-      io.to(PUBLIC_CHANNEL).emit('chat:typing', {
-        username: AI_BOT.username,
-        isTyping: false,
-      });
+      emitPhase('idle');
     } finally {
       processingMessages.delete(msg.id);
     }
@@ -111,9 +115,28 @@ export function setupPrivateRoomAI(io, roomStore) {
 
     processingMessages.add(msg.id);
 
+    const emitPhase = (phase) => {
+      if (phase === 'idle') {
+        io.to(roomCode).emit('proom:typing', {
+          username: AI_BOT.username,
+          isTyping: false,
+          phase: 'idle',
+        });
+        return;
+      }
+      io.to(roomCode).emit('proom:typing', {
+        username: AI_BOT.username,
+        isTyping: true,
+        phase,
+      });
+    };
+
     try {
-      // Process the query
-      const result = await processQuery(msg.text, msg.username, msg.username);
+      const result = await processQuery(msg.text, msg.username, msg.username, {
+        onPhase: emitPhase,
+      });
+
+      emitPhase('idle');
 
       if (result.success && result.response) {
         const aiMsg = createAIMessage(result.response, msg.username);
@@ -131,6 +154,7 @@ export function setupPrivateRoomAI(io, roomStore) {
       }
     } catch (err) {
       console.error('[AI-Chat] Error in room chat AI:', err);
+      emitPhase('idle');
     } finally {
       processingMessages.delete(msg.id);
     }

@@ -21,6 +21,13 @@
   --accent-light: #34D399;
   --accent-dark: #059669;
   --accent-muted: rgba(16, 185, 129, 0.15);
+  --brand-purple: #A855F7;
+  --brand-purple-light: #C084FC;
+  --brand-purple-dark: #7C3AED;
+  --brand-purple-muted: rgba(168, 85, 247, 0.18);
+  --pitch-green: #14532d;
+  --pitch-green-light: #166534;
+  --pitch-grass: #22c55e;
   --live-red: #EF4444;
   --live-red-muted: rgba(239, 68, 68, 0.15);
   --wc-gold: #EAB308;
@@ -114,11 +121,12 @@ body {
 .channel-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
+  gap: 0.625rem;
+  contain: layout style;
 }
 
 @media (min-width: 640px) {
-  .channel-grid { gap: 1.25rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .channel-grid { gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (min-width: 768px) {
@@ -198,14 +206,40 @@ body {
 
 /* ── Skeleton ─────────────────────────────────────────────── */
 .skeleton {
-  background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-card-hover) 50%, var(--bg-tertiary) 75%);
+  position: relative;
+  overflow: hidden;
+  background-color: var(--bg-tertiary);
+  background-image: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 40%,
+    color-mix(in srgb, var(--bg-card-hover) 80%, white 8%) 50%,
+    transparent 60%,
+    transparent 100%
+  );
   background-size: 200% 100%;
-  animation: shimmer 2s linear infinite;
+  animation: shimmer 1.6s ease-in-out infinite;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Fallback when color-mix unsupported */
+@supports not (background: color-mix(in srgb, white 10%, black)) {
+  .skeleton {
+    background-image: linear-gradient(
+      105deg,
+      var(--bg-tertiary) 0%,
+      var(--bg-tertiary) 40%,
+      var(--bg-card-hover) 50%,
+      var(--bg-tertiary) 60%,
+      var(--bg-tertiary) 100%
+    );
+  }
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* ── Hero ─────────────────────────────────────────────────── */
@@ -214,10 +248,371 @@ body {
 }
 
 .hero-gradient-text {
-  background-image: linear-gradient(135deg, #10B981, #34D399);
+  background-image: linear-gradient(135deg, var(--brand-purple-light), var(--brand-purple));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+/* ── Immersive stadium + grass scene ───────────────────────── */
+.stadium-scene {
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+}
+
+.stadium-scene__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.stadium-scene__bg-image {
+  position: absolute;
+  inset: -8% -5%;
+  background-image: url('/hero-stadium.jpg');
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  transform: scale(1.08);
+}
+
+@media (min-width: 768px) {
+  .stadium-scene__bg-image {
+    background-position: center 12%;
+    inset: -10% -4%;
+  }
+}
+
+@media (max-width: 639px) {
+  .stadium-scene__bg-image {
+    background-position: center top;
+    inset: -4% -12%;
+    transform: scale(1.12);
+  }
+}
+
+.stadium-scene__bg-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 90% 45% at 50% 8%, rgba(192, 132, 252, 0.22) 0%, transparent 65%),
+    radial-gradient(ellipse 60% 30% at 50% 0%, rgba(255, 255, 255, 0.08) 0%, transparent 55%);
+}
+
+.stadium-scene__bg-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(8, 6, 18, 0.35) 0%, rgba(8, 6, 18, 0.08) 28%, rgba(8, 6, 18, 0.05) 55%, rgba(8, 6, 18, 0.25) 100%),
+    linear-gradient(90deg, rgba(8, 6, 18, 0.45) 0%, transparent 18%, transparent 82%, rgba(8, 6, 18, 0.45) 100%);
+}
+
+.stadium-scene__bg-grass-tint {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 38%,
+    rgba(20, 83, 45, 0.08) 52%,
+    rgba(20, 83, 45, 0.18) 100%
+  );
+}
+
+.stadium-scene__content {
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
+  transform: translate3d(0, 0, 0);
+}
+
+/* Hero sits in the stadium portion of the scene */
+.home-hero {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: clamp(1rem, 4vh, 2rem);
+}
+
+.home-hero__content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  padding: 0.75rem 1.25rem 1rem;
+  max-width: 44rem;
+}
+
+.home-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  margin-top: 1rem;
+}
+
+@media (min-width: 640px) {
+  .home-hero {
+    padding-top: clamp(1.25rem, 5vh, 2.5rem);
+  }
+
+  .home-hero__content {
+    padding: 1rem 2rem 1.25rem;
+  }
+
+  .home-hero__actions {
+    gap: 0.875rem;
+    margin-top: 1.25rem;
+  }
+}
+
+.btn-hero-primary {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  background: var(--accent);
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.25);
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.btn-hero-primary:hover {
+  background: var(--accent-dark);
+}
+
+.btn-hero-primary:active {
+  transform: scale(0.97);
+}
+
+.btn-hero-secondary {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  border: 2px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.55);
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  backdrop-filter: blur(4px);
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+
+.btn-hero-secondary:hover {
+  border-color: rgba(148, 163, 184, 0.55);
+  background: rgba(30, 41, 59, 0.65);
+}
+
+.btn-hero-secondary:active {
+  transform: scale(0.97);
+}
+
+@media (min-width: 640px) {
+  .btn-hero-primary,
+  .btn-hero-secondary {
+    padding: 0.875rem 1.75rem;
+    font-size: 1rem;
+  }
+}
+
+.home-pitch {
+  position: relative;
+  background: transparent;
+  margin-top: clamp(-0.5rem, -1vh, 0rem);
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .home-pitch {
+    margin-top: 0;
+    padding-bottom: 1.75rem;
+  }
+}
+
+.home-pitch::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(20, 83, 45, 0.06) 8%,
+    rgba(20, 83, 45, 0.12) 100%
+  );
+  pointer-events: none;
+}
+
+.home-pitch__inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+  padding-block: 0.5rem 1rem;
+}
+
+@media (min-width: 1024px) {
+  .home-pitch__inner {
+    padding-inline: 1.5rem;
+    padding-block: 0.75rem 1.25rem;
+  }
+}
+
+.home-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 0.75rem;
+}
+
+.home-tabs__btn {
+  position: relative;
+  flex-shrink: 0;
+  min-height: 44px;
+  white-space: nowrap;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgba(241, 245, 249, 0.65);
+  transition: color 0.15s ease;
+}
+
+.home-tabs__btn:hover {
+  color: #f1f5f9;
+}
+
+.home-tabs__btn.is-active {
+  color: var(--brand-purple-light);
+}
+
+.home-tabs__btn.is-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--brand-purple);
+}
+
+.pitch-card {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 8, 22, 0.62);
+  border-radius: 0.875rem;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 12px 32px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(10px);
+  transform: translateZ(0);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.pitch-card:hover {
+  border-color: rgba(168, 85, 247, 0.45);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 24px rgba(168, 85, 247, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  transform: translateY(-2px);
+}
+
+.pitch-card:active {
+  transform: scale(0.98);
+}
+
+.nav-pill-active {
+  color: #fff !important;
+  font-weight: 600;
+  background: var(--brand-purple-muted);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
+.logo-brand {
+  color: var(--text-primary);
+}
+
+.logo-brand span {
+  color: var(--brand-purple-light);
+}
+
+/* Homepage shell overrides */
+.layout--homepage {
+  background: transparent !important;
+}
+
+.layout--homepage main {
+  background: transparent;
+}
+
+.layout--homepage footer {
+  position: relative;
+  z-index: 2;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(8, 6, 18, 0.72);
+  backdrop-filter: blur(8px);
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem;
+}
+
+.layout--homepage header {
+  background: rgba(8, 6, 18, 0.55) !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  backdrop-filter: blur(10px);
+}
+
+/* Disable expensive blurs while scrolling — background untouched */
+.layout--homepage.is-scrolling header {
+  backdrop-filter: none;
+  background: rgba(8, 6, 18, 0.92) !important;
+}
+
+.layout--homepage.is-scrolling footer {
+  backdrop-filter: none;
+  background: rgba(8, 6, 18, 0.92);
+}
+
+.layout--homepage.is-scrolling .pitch-card,
+.layout--homepage.is-scrolling .btn-hero-secondary {
+  backdrop-filter: none;
+}
+
+.layout--homepage.is-scrolling .glass-panel {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.home-pitch__inner {
+  contain: layout style;
+}
+
+.home-section-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .home-section-stack {
+    gap: 1.25rem;
+  }
 }
 
 /* ── Room code ────────────────────────────────────────────── */
@@ -249,6 +644,599 @@ body {
 .player-container {
   aspect-ratio: 16 / 9;
   background: #000;
+  /* Keep the video paint surface isolated so brightness filter doesn't
+     affect overlays; also helps fullscreen compositing. */
+  isolation: isolate;
+}
+
+/* Invisible vertical-swipe surface (left = brightness, right = volume).
+   touch-action: none so the page doesn't scroll while adjusting. */
+.player-gesture-layer {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+  background: transparent;
+}
+
+.player-video {
+  /* Ensure brightness filter applies only to the video pixels */
+  will-change: filter;
+}
+
+/* Sticky stream on mobile/tablet: sits just below the sticky header (h-16)
+   so users can scroll chat / watch party / related while the video stays put.
+   Desktop (lg+) keeps normal flow — the sidebar is already sticky. */
+.player-sticky-mobile {
+  position: sticky;
+  top: 4rem; /* matches header h-16 */
+  z-index: 40;
+  background: #000;
+  /* solid base so scrolling content never bleeds through the video */
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+@media (min-width: 1024px) {
+  .player-sticky-mobile {
+    position: relative;
+    top: auto;
+    z-index: auto;
+    box-shadow: none;
+  }
+}
+
+/* ── Stream ↔ options separator (watch page) ───────────────────────────────
+   Visual break between the video and channel info / Live / Party / Chat / AI. */
+.watch-stream-separator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.55rem 1rem 0.35rem;
+  user-select: none;
+}
+
+.watch-stream-separator-line {
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--border-primary) 12%,
+    var(--border-primary) 88%,
+    transparent
+  );
+  opacity: 0.9;
+}
+
+.watch-stream-separator-handle {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+.watch-stream-separator-grip {
+  display: block;
+  width: 2.25rem;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: var(--text-muted);
+  opacity: 0.55;
+}
+
+.watch-stream-separator-label {
+  flex-shrink: 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+@media (min-width: 1024px) {
+  /* Desktop: stream and sidebar sit side-by-side — hide the mobile-style handle */
+  .watch-stream-separator {
+    padding: 0.35rem 0 0.15rem;
+  }
+
+  .watch-stream-separator-handle {
+    display: none;
+  }
+}
+
+/* Mobile bottom nav collapse — free vertical space for stream + chat */
+.layout-bottom-nav-wrap {
+  pointer-events: none;
+}
+
+.layout-bottom-nav-wrap .layout-bottom-nav,
+.layout-bottom-nav-wrap .bottom-nav-show-chip {
+  pointer-events: auto;
+}
+
+.layout-bottom-nav-wrap.is-collapsed {
+  height: 0;
+}
+
+body.bottom-nav-collapsed .page-container {
+  padding-bottom: 0.5rem;
+}
+
+body.bottom-nav-collapsed .bottom-nav-page-pad {
+  height: 2.5rem;
+}
+
+@media (min-width: 768px) {
+  body.bottom-nav-collapsed .bottom-nav-page-pad {
+    height: 0;
+  }
+}
+
+/* Prefer dynamic viewport units when available */
+@supports (height: 100dvh) {
+  .player-container.is-fullscreen {
+    height: 100dvh;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   KEYBOARD MODE (Chrome-first, simple)
+   interactive-widget=resizes-content shrinks the layout viewport with the
+   keyboard. Fixed top:0 / bottom:0 then sit above the keyboard automatically.
+   Open is driven by chat focus (body.keyboard-open) — no vv math, no body lock.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+body.keyboard-open {
+  overflow: hidden;
+}
+
+body.keyboard-open .layout-header,
+body.keyboard-open .layout-bottom-nav-wrap,
+body.keyboard-open .layout-bottom-nav,
+body.keyboard-open .layout-ticker,
+body.keyboard-open .layout-footer,
+body.keyboard-open .wc-fab,
+body.keyboard-open .pwa-prompt-position,
+body.keyboard-open .watch-stream-separator,
+body.keyboard-open .bottom-nav-page-pad,
+body.keyboard-open .watch-channel-strip,
+body.keyboard-open .watch-primary-tabs,
+body.keyboard-open .mini-player,
+body.keyboard-open .mini-player-chip {
+  display: none !important;
+}
+
+body.keyboard-open .chat-composer-extras,
+body.keyboard-open .chat-panel-header {
+  display: none !important;
+}
+
+/* Small stream strip pinned to top of the (resized) viewport */
+.player-keyboard-pinned {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  height: var(--player-height, 110px) !important;
+  max-height: var(--player-height, 110px) !important;
+  aspect-ratio: auto !important;
+  z-index: 200 !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.player-keyboard-pinned .player-video {
+  height: 100% !important;
+  width: 100% !important;
+  object-fit: contain !important;
+}
+
+.player-keyboard-spacer {
+  width: 100%;
+  height: var(--player-height, 110px);
+  aspect-ratio: auto;
+  background: #000;
+  pointer-events: none;
+}
+
+/*
+ * Chat panel fills everything under the stream down to bottom:0.
+ * With resizes-content, bottom:0 is already above the keyboard on Chrome.
+ */
+.watch-panel-keyboard-shell {
+  position: fixed !important;
+  top: var(--player-height, 110px) !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  z-index: 200 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-primary);
+}
+
+/*
+ * Only the *active* panel child is a flex column. Inactive siblings use
+ * Tailwind `hidden` — we must NOT force display:flex on them (that stacked
+ * Live Chat + BGC AI composers on top of each other).
+ */
+.watch-panel-keyboard-shell > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.watch-panel-keyboard-shell > *:not(.hidden) {
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  max-height: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+.watch-panel-keyboard-shell > .hidden {
+  display: none !important;
+  flex: 0 0 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+.watch-panel-keyboard {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.watch-panel-keyboard-flow-spacer {
+  width: 100%;
+  height: 50vh;
+  pointer-events: none;
+}
+
+/* Chat layout: messages scroll, composer is flex footer */
+.chat-panel-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.chat-panel-header {
+  flex: 0 0 auto;
+}
+
+.chat-panel-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.chat-panel-composer {
+  flex: 0 0 auto !important;
+  position: relative !important;
+  bottom: auto !important;
+  left: auto !important;
+  right: auto !important;
+  z-index: 6;
+  width: 100%;
+  background: var(--bg-secondary) !important;
+  border-top: 1px solid var(--border-primary);
+  padding: 0.5rem 0.65rem;
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.25);
+}
+
+body.keyboard-open .chat-panel-composer {
+  position: relative !important;
+  bottom: auto !important;
+  /* Keyboard already clears the home indicator */
+  padding-bottom: 0.5rem !important;
+}
+
+.chat-panel-composer input[type="text"],
+.chat-panel-composer input:not([type]),
+.chat-panel-composer textarea {
+  font-size: 16px !important;
+  line-height: 1.35;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE WATCH — primary tabs, cinema landscape, mini-player
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.watch-primary-tabs {
+  display: flex;
+  width: 100%;
+  gap: 0.35rem;
+  padding: 0.45rem;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.watch-primary-tabs__btn {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  border-radius: 0.75rem;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+.watch-primary-tabs__btn:active {
+  transform: scale(0.97);
+}
+
+.watch-primary-tabs__btn.is-active {
+  background: var(--bg-secondary);
+  color: var(--accent);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25), 0 0 0 1px var(--border-primary);
+}
+
+.watch-primary-tabs__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.watch-primary-tabs__label {
+  line-height: 1.1;
+}
+
+.watch-channel-strip {
+  min-height: 44px;
+}
+
+/* Landscape pure stream — player fills the visual viewport */
+body.watch-landscape-pure .layout-header,
+body.watch-landscape-pure .layout-bottom-nav-wrap,
+body.watch-landscape-pure .layout-bottom-nav,
+body.watch-landscape-pure .layout-ticker,
+body.watch-landscape-pure .layout-footer,
+body.watch-landscape-pure .wc-fab,
+body.watch-landscape-pure .pwa-prompt-position,
+body.watch-landscape-pure .bottom-nav-page-pad,
+body.watch-landscape-pure .mini-player,
+body.watch-landscape-pure .mini-player-chip {
+  display: none !important;
+}
+
+body.watch-landscape-pure {
+  overflow: hidden;
+  background: #000;
+}
+
+body.watch-landscape-pure main {
+  min-height: 100dvh;
+}
+
+.player-landscape-pure {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  z-index: 120 !important;
+  border-radius: 0 !important;
+  aspect-ratio: auto !important;
+}
+
+.player-landscape-pure .player-video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+
+.watch-landscape-hint {
+  position: fixed;
+  left: 50%;
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
+  z-index: 130;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.watch-landscape-hint__bar {
+  width: 2.25rem;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.watch-landscape-peek {
+  position: fixed !important;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 140;
+  margin: 0 !important;
+  max-height: min(72dvh, 520px);
+  padding: 0;
+}
+
+.watch-landscape-peek__panel {
+  max-height: min(72dvh, 520px);
+  border-radius: 1rem 1rem 0 0 !important;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Floating mini-player (scores / match center while stream continues) */
+.mini-player {
+  position: fixed;
+  right: 0.75rem;
+  bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  z-index: 55;
+  width: min(46vw, 200px);
+  border-radius: 0.85rem;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+@media (min-width: 768px) {
+  .mini-player {
+    bottom: 1.25rem;
+    width: 240px;
+  }
+}
+
+body.bottom-nav-collapsed .mini-player {
+  bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+}
+
+.mini-player__video {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  cursor: pointer;
+}
+
+.mini-player__live {
+  position: absolute;
+  top: 0.35rem;
+  left: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 0.25rem;
+  background: rgba(220, 38, 38, 0.9);
+  padding: 0.1rem 0.35rem;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+}
+
+.mini-player__live-dot {
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: #fff;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.mini-player__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem 0.35rem 0.35rem 0.5rem;
+}
+
+.mini-player__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.mini-player__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.mini-player__btn {
+  display: flex;
+  height: 1.75rem;
+  width: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.4rem;
+  color: var(--text-secondary);
+}
+
+.mini-player__btn:active {
+  background: var(--bg-tertiary);
+}
+
+.mini-player__btn--close {
+  color: #f87171;
+}
+
+.mini-player-chip {
+  position: fixed;
+  right: 0.75rem;
+  bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  z-index: 55;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  padding: 0.45rem 0.75rem;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.mini-player-chip-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+}
+
+@media (min-width: 768px) {
+  .mini-player-chip {
+    bottom: 1.25rem;
+  }
 }
 
 .player-container:fullscreen,
@@ -315,6 +1303,145 @@ body {
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
 }
 
+/* ── Pull-to-refresh (mobile) ─────────────────────────────── */
+/* Reduce conflict with browser native overscroll refresh */
+html,
+body {
+  overscroll-behavior-y: contain;
+}
+
+@keyframes ptr-ball-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes ptr-pulse-ring {
+  0% {
+    transform: scale(0.65);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
+@keyframes ptr-logo-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.85;
+  }
+}
+
+.ptr-football {
+  display: block;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+  transition: transform 0.05s linear;
+  will-change: transform;
+}
+
+.ptr-football--spin {
+  animation: ptr-ball-spin 0.75s linear infinite;
+}
+
+.ptr-ball-wrap {
+  isolation: isolate;
+}
+
+.ptr-pulse-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  border: 2px solid var(--accent);
+  animation: ptr-pulse-ring 1.1s ease-out infinite;
+  pointer-events: none;
+}
+
+.ptr-logo-pulse {
+  animation: ptr-logo-pulse 1s ease-in-out infinite;
+}
+
+.ptr-pill {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ptr-football--spin,
+  .ptr-pulse-ring,
+  .ptr-logo-pulse {
+    animation: none !important;
+  }
+}
+
+/* ============================================================
+   View Transitions API — page fades + channel card → player morph
+   ============================================================ */
+@keyframes bgc-vt-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes bgc-vt-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@supports (view-transition-name: none) {
+  /* Soft page crossfade between routes */
+  ::view-transition-old(root) {
+    animation: bgc-vt-fade-out 200ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  ::view-transition-new(root) {
+    animation: bgc-vt-fade-in 240ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  /* Shared element: channel thumbnail ↔ player surface */
+  ::view-transition-group(channel-media) {
+    animation-duration: 340ms;
+    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+    z-index: 100;
+  }
+
+  ::view-transition-image-pair(channel-media) {
+    isolation: isolate;
+  }
+
+  ::view-transition-old(channel-media),
+  ::view-transition-new(channel-media) {
+    height: 100%;
+    width: 100%;
+    object-fit: cover;
+    overflow: clip;
+    border-radius: inherit;
+  }
+
+  /* Crossfade the pair while the group morphs size/position */
+  ::view-transition-old(channel-media) {
+    animation: bgc-vt-fade-out 220ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  ::view-transition-new(channel-media) {
+    animation: bgc-vt-fade-in 280ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+      animation: none !important;
+    }
+  }
+}
+
 /* ── Mobile FAB & bottom sheet ────────────────────────────── */
 .wc-fab {
   bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
@@ -343,7 +1470,14 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .live-badge__dot,
   .animate-pulseLive,
-  .skeleton,
-  .sheet-panel { animation: none; }
-  .card-sports:active { transform: none; }
+  .sheet-panel,
+  .card-sports:active,
+  .pitch-card:active { transform: none; }
+
+  .skeleton {
+    animation: none;
+    background-image: none;
+    background-color: var(--bg-tertiary);
+    opacity: 0.85;
+  }
 }

@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import { buildToffeeSourceUrl, createToffeeHlsConfig } from '../lib/toffee.js';
 import { ensureToffeeServiceWorker } from '../lib/toffeeSw.js';
+import { reportStreamError } from '../lib/errorTracker.js';
+import { PlayerSkeleton } from './Skeleton.jsx';
 
 const DRIFT_THRESHOLD = 2; // seconds
 
@@ -80,6 +82,13 @@ export default function Player({
         hls.on(Hls.Events.MANIFEST_PARSED, () => setLoading(false));
         hls.on(Hls.Events.ERROR, (_e, data) => {
           if (data.fatal) {
+            reportStreamError({
+              message: `Player HLS fatal: ${data.details || data.type || 'unknown'}`,
+              url: sourceUrl || url,
+              type: data.type,
+              details: data,
+              fatal: true,
+            });
             setError('Stream error — the source may be offline.');
             setLoading(false);
           }
@@ -91,6 +100,11 @@ export default function Player({
       video.src = url;
       video.addEventListener('loadeddata', () => setLoading(false), { once: true });
     } else {
+      reportStreamError({
+        message: 'HLS not supported in this browser',
+        url,
+        type: 'unsupported',
+      });
       setError('HLS is not supported in this browser.');
       setLoading(false);
     }
@@ -240,22 +254,26 @@ export default function Player({
   // ----- HLS player ---------------------------------------------------------
   return (
     <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black shadow-card ring-1 ring-ink-600/50">
-      {/* Loading skeleton */}
-      {loading && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-ink-900">
-          <div className="flex flex-col items-center gap-3">
-            <div className="h-10 w-10 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
-            <span className="text-sm text-slate-400">Loading stream...</span>
-          </div>
-        </div>
-      )}
+      {/* Content-shaped player skeleton */}
+      {loading && <PlayerSkeleton />}
       <video
         ref={videoRef}
         className="h-full w-full"
         controls
         playsInline
         autoPlay
-        muted={!isHost && inRoom ? false : true}
+        // Unmuted by default so stream audio follows the device volume.
+        // Browsers may still require a user gesture for autoplay-with-sound.
+        muted={false}
+        onLoadedData={() => {
+          const video = videoRef.current;
+          if (!video) return;
+          video.volume = 1;
+          video.muted = false;
+          video.play().catch(() => {
+            // Autoplay with sound blocked — stay ready for user unmute via controls.
+          });
+        }}
       />
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/80 p-4 text-center">

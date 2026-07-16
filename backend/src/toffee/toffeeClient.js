@@ -4,8 +4,8 @@ import { toffeeConfig } from './config.js';
 import { createToffeeLogger } from './logger.js';
 import { buildToffeeRequest } from './requestBuilder.js';
 import { updateSessionFromResponse } from './cookieManager.js';
-import { nextProxy, markProxyDead, hasProxies } from './proxyRouter.js';
-import { withRetries } from './retryHandler.js';
+import { nextProxy, markProxyDead, hasProxies, noteProxySuccess } from './proxyRouter.js';
+import { ensureToffeeProxies } from './proxyPool.js';
 import { classifyFetchError, classifyHttpResponse } from './errorClassifier.js';
 import { validateBinaryResponse, validateManifest } from './responseValidator.js';
 import { ToffeeErrorCode, ToffeeRequestError } from './errors.js';
@@ -20,16 +20,24 @@ function decodeHeadersParam(encoded) {
   }
 }
 
-async function executeFetch(requestSpec, meta) {
+function needsProxyEgress(url = '') {
+  // Toffee CDN hostnames often fail public DNS outside BD
+  return /toffeelive\.com/i.test(url);
+}
+
+async function singleFetch(requestSpec, meta, proxy) {
   const started = Date.now();
-  const proxy = hasProxies() ? nextProxy() : null;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), toffeeConfig.requestTimeoutMs);
 
   try {
     const response = await fetch(requestSpec.url, {
       method: requestSpec.method,
-      headers: requestSpec.headers,
+      headers: {
+        ...requestSpec.headers,
+        // Avoid compressed bodies that some free proxies mangle
+        'Accept-Encoding': 'identity',
+      },
       redirect: 'follow',
       signal: controller.signal,
       agent: proxy?.agent,
@@ -48,6 +56,7 @@ async function executeFetch(requestSpec, meta) {
     updateSessionFromResponse(requestSpec.url, response.headers);
 
     if (!response.ok) {
+      if (proxy?.url) markProxyDead(proxy.url);
       const text = await response.text().catch(() => '');
       throw classifyHttpResponse(response.status, text, {
         requestId: meta.requestId,
@@ -55,6 +64,7 @@ async function executeFetch(requestSpec, meta) {
       });
     }
 
+    if (proxy?.url) noteProxySuccess(proxy.url);
     return response;
   } catch (error) {
     if (proxy?.url) markProxyDead(proxy.url);
@@ -71,6 +81,38 @@ async function executeFetch(requestSpec, meta) {
   }
 }
 
+/**
+ * Try up to N known proxies before giving up (no rediscover inside).
+ */
+async function executeFetch(requestSpec, meta, { forceProxy = false, attempts = 3 } = {}) {
+  const wantProxy = forceProxy || hasProxies() || needsProxyEgress(requestSpec.url);
+  let lastError = null;
+
+  for (let i = 0; i < attempts; i += 1) {
+    const proxy = wantProxy ? nextProxy() : null;
+    if (wantProxy && !proxy) {
+      lastError = new ToffeeRequestError(
+        ToffeeErrorCode.DNS_FAILURE,
+        'Target host is unreachable from this network. Toffee CDN requires a Bangladesh connection or configured upstream proxy.',
+        { requestId: meta.requestId, url: requestSpec.url }
+      );
+      break;
+    }
+    try {
+      return await singleFetch(requestSpec, meta, proxy);
+    } catch (err) {
+      lastError = err;
+      // try next proxy
+    }
+  }
+
+  throw lastError || new ToffeeRequestError(
+    ToffeeErrorCode.NETWORK_FAILURE,
+    'All Toffee egress attempts failed',
+    { requestId: meta.requestId, url: requestSpec.url }
+  );
+}
+
 export async function fetchToffeeResource({
   url,
   headers = {},
@@ -82,6 +124,21 @@ export async function fetchToffeeResource({
   const mergedHeaders = { ...decodeHeadersParam(encodedHeaders), ...headers };
   const requestSpec = buildToffeeRequest(url, mergedHeaders);
 
+  // Ensure BD egress proxies are warm before hitting geo-DNS CDN
+  if (needsProxyEgress(url)) {
+    try {
+      await ensureToffeeProxies({
+        testUrl: url.includes('playlist.m3u8') || url.includes('.m3u8')
+          ? url
+          : undefined,
+        headers: requestSpec.headers,
+        force: !hasProxies(),
+      });
+    } catch (err) {
+      logger.info('proxy_warm_failed', { error: err.message });
+    }
+  }
+
   logger.info('request_start', {
     targetHost: new URL(url).hostname,
     expect,
@@ -90,10 +147,39 @@ export async function fetchToffeeResource({
     proxyConfigured: hasProxies(),
   });
 
-  const response = await withRetries(
-    () => executeFetch(requestSpec, { requestId, logger }),
-    { maxRetries: toffeeConfig.maxRetries }
-  );
+  let response;
+  try {
+    response = await executeFetch(
+      requestSpec,
+      { requestId, logger },
+      { forceProxy: needsProxyEgress(url), attempts: 4 }
+    );
+  } catch (err) {
+    // One rediscover + retry (rate-limited inside ensureToffeeProxies)
+    if (
+      needsProxyEgress(url)
+      && (err?.code === ToffeeErrorCode.DNS_FAILURE
+        || err?.code === ToffeeErrorCode.NETWORK_FAILURE
+        || err?.code === ToffeeErrorCode.PROXY_FAILURE)
+    ) {
+      try {
+        await ensureToffeeProxies({
+          testUrl: url.includes('.m3u8') ? url : undefined,
+          headers: requestSpec.headers,
+          force: true,
+        });
+      } catch {
+        /* ignore */
+      }
+      response = await executeFetch(
+        requestSpec,
+        { requestId, logger },
+        { forceProxy: true, attempts: 3 }
+      );
+    } else {
+      throw err;
+    }
+  }
 
   if (expect === 'manifest') {
     const text = await response.text();

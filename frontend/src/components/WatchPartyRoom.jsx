@@ -13,7 +13,7 @@ import {
 } from '../lib/utils.js';
 import { getProfile, getEffectiveName, getEffectiveAvatar, saveProfile } from '../lib/profile.js';
 import { saveRoomSession, getRoomSession, clearRoomSession } from '../lib/roomSession.js';
-import { slugify } from '../lib/slug.js';
+import { resolveInviteUrl, shareInvite } from '../lib/watchInvite.js';
 import { apiGet } from '../lib/config.js';
 import UserAvatar from './UserAvatar.jsx';
 import AiBotBadge from './AiBotBadge.jsx';
@@ -142,7 +142,19 @@ const JOIN_TIMEOUT_MS = 15000;
 // When `theater` is true (stream fit-to-screen), the full panel is visually
 // hidden but stays MOUNTED so WebRTC calls keep running in the background.
 // A compact floating pill surfaces call status + quick controls instead.
-export default function WatchPartyRoom({ partyCode = '', theater = false }) {
+//
+// Deep-link invites: `partyCode` from ?party=ABC123 auto-joins the room.
+// `onPartyCodeChange(code|null)` lets the parent sync the URL so the host's
+// address bar is also a shareable invite.
+export default function WatchPartyRoom({
+  partyCode = '',
+  theater = false,
+  channelSlug = '',
+  channelName = '',
+  streamUrl = '',
+  onPartyCodeChange,
+  onOpenShareSheet,
+}) {
   const { connected } = useSocket();
   const username = getEffectiveName();
   const myAvatar = getEffectiveAvatar();
@@ -159,9 +171,17 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
   const [busy, setBusy] = useState(false);
   const [lobbyError, setLobbyError] = useState(null);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState('');
+  const [autoJoining, setAutoJoining] = useState(
+    () => sanitizeRoomCode(partyCode).length === ROOM_CODE_LEN
+  );
   const roomRef = useRef(null);
   const joinTimeoutRef = useRef(null);
   const autoJoinAttemptedRef = useRef(false);
+  const onPartyCodeChangeRef = useRef(onPartyCodeChange);
+  useEffect(() => {
+    onPartyCodeChangeRef.current = onPartyCodeChange;
+  }, [onPartyCodeChange]);
   // True while our socket is down (or resuming) and the server may be holding
   // our slot — drives the "Reconnecting…" banner.
   const [reconnecting, setReconnecting] = useState(false);
@@ -228,9 +248,11 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
       busy ||
       code.length !== ROOM_CODE_LEN
     ) {
+      if (code.length !== ROOM_CODE_LEN) setAutoJoining(false);
       return;
     }
     autoJoinAttemptedRef.current = true;
+    setAutoJoining(true);
     const u = (nameInput || '').trim() || getEffectiveName();
     if ((nameInput || '').trim()) setStoredUsername(u);
     setLobbyError(null);
@@ -241,12 +263,32 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
       .catch((err) => {
         clearJoinTimeout();
         setBusy(false);
+        setAutoJoining(false);
         const msg = err.message || 'Could not connect to the server';
         setLobbyError(msg);
         showToast(msg, 'error');
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyCode, room, busy]);
+
+  // Keep a resolved invite URL for display/share while in a room
+  useEffect(() => {
+    let cancelled = false;
+    if (!room?.code) {
+      setInviteUrl('');
+      return undefined;
+    }
+    resolveInviteUrl(room.code, {
+      channelSlug,
+      channelName,
+      streamUrl,
+    }).then((url) => {
+      if (!cancelled) setInviteUrl(url || '');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [room?.code, channelSlug, channelName, streamUrl]);
 
   // Auto-join the active call when entering a room that already has participants in a call.
   // This triggers once when `members` first populates after joining.
@@ -354,29 +396,35 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
     function onCreated({ room: r, sessionToken }) {
       clearJoinTimeout();
       setBusy(false);
+      setAutoJoining(false);
       setLobbyError(null);
       applyRoom(r);
       setMessages([]);
       if (sessionToken) saveRoomSession('watchParty', { code: r.code, sessionToken });
-      showToast(`Room created — code ${r.code}`, 'success');
+      onPartyCodeChangeRef.current?.(r.code);
+      showToast(`Room created — share the invite link!`, 'success');
     }
     function onJoined({ room: r, chat, sessionToken }) {
       clearJoinTimeout();
       setBusy(false);
+      setAutoJoining(false);
       setLobbyError(null);
       applyRoom(r);
       setMessages(chat || []);
       if (sessionToken) saveRoomSession('watchParty', { code: r.code, sessionToken });
-      showToast(`Joined room ${r.code}`, 'success');
+      onPartyCodeChangeRef.current?.(r.code);
+      showToast(`Joined watch party ${r.code}`, 'success');
     }
     function onResumed({ room: r, chat, sessionToken }) {
       clearJoinTimeout();
       setBusy(false);
+      setAutoJoining(false);
       setReconnecting(false);
       setLobbyError(null);
       applyRoom(r);
       setMessages(chat || []);
       if (sessionToken) saveRoomSession('watchParty', { code: r.code, sessionToken });
+      onPartyCodeChangeRef.current?.(r.code);
       showToast('Reconnected to the watch party', 'success');
     }
     function onResumeFailed({ error }) {
@@ -390,12 +438,14 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
         setHostId(null);
         setLocked(false);
         setMessages([]);
+        onPartyCodeChangeRef.current?.(null);
         showToast(error || 'Could not rejoin the party — the session expired', 'error');
       }
     }
     function onError({ error }) {
       clearJoinTimeout();
       setBusy(false);
+      setAutoJoining(false);
       const msg = error || 'Room error';
       setLobbyError(msg);
       showToast(msg, 'error');
@@ -700,6 +750,9 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
     setHostId(null);
     setLocked(false);
     setJoinCode('');
+    setInviteUrl('');
+    setAutoJoining(false);
+    onPartyCodeChangeRef.current?.(null);
   }
   function leaveRoom() { hardLeave(); showToast('You left the room', 'success'); }
 
@@ -740,62 +793,57 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
     if (track) { const next = !camOff; track.enabled = !next; setCamOff(next); socket.emit('proom:cam', { camOff: next }); }
   }
 
-  // Build a shareable invite that deep-links to the CURRENT channel with the
-  // party pre-joined. Prefers pretty slug URLs (/watch/bein-sports-1?party=ABC123)
-  // when on a slug route or when the channel name is known; otherwise preserves
-  // the current query params (url/name/logo/source) and appends party=CODE.
-  function buildInviteUrl(code) {
-    const { origin, pathname, search } = window.location;
-    const params = new URLSearchParams(search);
-    params.delete('party');
-    params.delete('room');
-
-    // Already on a pretty slug route (/watch/:slug) — keep it as-is.
-    const slugMatch = pathname.match(/^\/watch\/([^/]+)$/);
-    if (slugMatch) {
-      const rest = params.toString();
-      return `${origin}${pathname}?${rest ? `${rest}&` : ''}party=${code}`;
-    }
-
-    // Fallback: preserve whatever context the current URL has (url/name/logo/
-    // source query params, custom stream URLs, etc.) and merge in the party code.
-    const rest = params.toString();
-    return `${origin}${pathname}?${rest ? `${rest}&` : ''}party=${code}`;
-  }
-
-  // Try to upgrade a query-param watch URL to a pretty slug deep link
-  // (/watch/bein-sports-1?party=CODE). Only used when the backend confirms the
-  // slug resolves to the SAME stream url, so invites never break for custom
-  // streams or channels missing from the database.
-  async function buildPrettyInviteUrl(code) {
-    const { origin, pathname, search } = window.location;
-    if (pathname !== '/watch') return null; // slug routes already pretty
-    const params = new URLSearchParams(search);
-    const channelName = params.get('name');
-    const streamUrl = params.get('url');
-    if (!channelName || !streamUrl) return null;
-    const slug = slugify(channelName);
-    if (!slug) return null;
-    try {
-      const data = await apiGet(`/api/channels/by-slug/${encodeURIComponent(slug)}`);
-      if (data?.channel?.url === streamUrl) {
-        return `${origin}/watch/${slug}?party=${code}`;
-      }
-    } catch {
-      /* slug not resolvable — fall back to query-param invite */
-    }
-    return null;
+  async function getInviteLink() {
+    if (!room?.code) return '';
+    if (inviteUrl) return inviteUrl;
+    return resolveInviteUrl(room.code, {
+      channelSlug,
+      channelName,
+      streamUrl,
+    });
   }
 
   async function copyCode() {
     if (!room) return;
-    const inviteUrl = (await buildPrettyInviteUrl(room.code)) || buildInviteUrl(room.code);
-    const ok = await copyToClipboard(inviteUrl);
+    const url = await getInviteLink();
+    const ok = await copyToClipboard(url);
     if (ok) {
+      setInviteUrl(url);
       setCodeCopied(true);
       setTimeout(() => setCodeCopied(false), 2000);
     }
-    showToast(ok ? 'Invite link copied!' : 'Copy failed', ok ? 'success' : 'error');
+    showToast(
+      ok ? 'Invite link copied — friends join this channel + party' : 'Copy failed',
+      ok ? 'success' : 'error'
+    );
+  }
+
+  async function shareCode() {
+    if (!room) return;
+    const url = await getInviteLink();
+    setInviteUrl(url);
+    // Prefer parent share sheet (WhatsApp / Messenger / copy) when provided
+    if (typeof onOpenShareSheet === 'function') {
+      onOpenShareSheet({
+        code: room.code,
+        url,
+        title: `Watch Together${channelName ? ` — ${channelName}` : ''}`,
+        text: `Join my BGC Sports watch party (${room.code}). Open the link to watch together:`,
+      });
+      return;
+    }
+    const result = await shareInvite({
+      url,
+      title: `Watch Together${channelName ? ` — ${channelName}` : ''}`,
+      text: `Join my BGC Sports watch party (${room.code}). Open the link to watch together:`,
+    });
+    if (result === 'shared') {
+      showToast('Invite shared!', 'success');
+    } else if (result === 'copied') {
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+      showToast('Invite link copied!', 'success');
+    }
   }
 
   function sendChat(e) {
@@ -883,6 +931,9 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
 
   // Lobby — not in a room yet
   if (!room) {
+    const inviteCode = sanitizeRoomCode(partyCode) || joinCode;
+    const joiningInvite = autoJoining || (busy && inviteCode.length === ROOM_CODE_LEN && autoJoinAttemptedRef.current);
+
     return (
       <>
       {theaterPill}
@@ -891,9 +942,29 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
           <div className="h-1 w-1 rounded-full bg-[var(--accent)]" />
           <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">Watch Party Room</h2>
         </div>
-        <p className="text-sm text-[var(--text-secondary)] mb-6">
-          Create or join a room to watch together with up to 10 friends. Video and audio call while enjoying the stream.
-        </p>
+
+        {joiningInvite ? (
+          <div className="mb-6 rounded-xl border border-[var(--accent)]/30 bg-[var(--accent-muted)] px-4 py-4" role="status" aria-label="Joining watch party">
+            <div className="mb-3 grid grid-cols-3 gap-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="skeleton aspect-square w-full rounded-xl" />
+              ))}
+            </div>
+            <p className="text-center text-sm font-bold text-[var(--text-primary)]">
+              Joining watch party…
+            </p>
+            <p className="mt-1 text-center font-mono text-lg font-extrabold tracking-widest text-[var(--accent)]">
+              {inviteCode}
+            </p>
+            <p className="mt-1 text-center text-[11px] text-[var(--text-muted)]">
+              You opened an invite link — connecting you to the room.
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-[var(--text-secondary)] mb-6">
+            Create a room and share the invite link so friends land on this channel with the party pre-joined.
+          </p>
+        )}
 
         <div className="max-w-md mx-auto space-y-4">
           {!connected && (
@@ -918,7 +989,7 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
             disabled={busy}
             className="w-full rounded-lg bg-[var(--accent)] px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-[var(--accent-dark)] active:scale-[0.98] disabled:opacity-60"
           >
-            {busy ? 'Creating...' : 'Create a Room'}
+            {busy && !joiningInvite ? 'Creating...' : 'Create a Room'}
           </button>
 
           <div className="flex items-center gap-3">
@@ -1004,7 +1075,13 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
           </div>
         </div>
 
-        <RoomCodeDisplay code={room.code} onCopy={copyCode} copied={codeCopied} />
+        <RoomCodeDisplay
+          code={room.code}
+          inviteUrl={inviteUrl}
+          onCopy={copyCode}
+          onShare={shareCode}
+          copied={codeCopied}
+        />
 
         {/* Members in the reconnect grace period */}
         {disconnectedMembers.length > 0 && (
@@ -1171,14 +1248,15 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
               </button>
 
               <button
-                onClick={copyCode}
-                title="Invite friends"
+                onClick={shareCode}
+                title="Invite friends — WhatsApp, Messenger, link"
                 className="flex items-center gap-2 rounded-lg border border-[var(--accent)]/30 bg-[var(--accent-muted)] px-4 py-2.5 text-sm font-semibold text-[var(--accent)] transition-all hover:bg-[var(--accent)]/20 active:scale-[0.95]"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                 </svg>
                 <span className="hidden sm:inline">Invite Friends</span>
+                <span className="sm:hidden">Invite</span>
               </button>
             </div>
 
@@ -1325,8 +1403,10 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
                   className="mb-2 w-full rounded-lg border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]"
                 />
                 {gifLoading ? (
-                  <div className="flex h-24 items-center justify-center">
-                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--accent)]/30 border-t-[var(--accent)]" />
+                  <div className="grid max-h-40 grid-cols-2 gap-1.5" role="status" aria-label="Loading GIFs">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="skeleton aspect-video w-full rounded-lg" />
+                    ))}
                   </div>
                 ) : gifs.length === 0 ? (
                   <p className="py-4 text-center text-[10px] text-[var(--text-muted)]">No GIFs found</p>
@@ -1361,13 +1441,16 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
               </div>
             )}
 
-            {/* Composer */}
-            <form onSubmit={sendChat} className="flex items-center gap-1.5 border-t border-[var(--border-primary)] px-3 py-2">
-              {/* GIF button */}
+            {/* Composer — 16px prevents iOS zoom; data-party-chat for keyboard dock */}
+            <form
+              onSubmit={sendChat}
+              data-party-chat
+              className="chat-panel-composer flex items-center gap-1.5 border-t border-[var(--border-primary)] px-3 py-2"
+            >
               <button
                 type="button"
                 onClick={() => setShowGifPicker((v) => !v)}
-                className={`flex h-7 shrink-0 items-center justify-center rounded-full border px-2 text-[9px] font-extrabold transition-all active:scale-95 ${
+                className={`chat-composer-extras flex h-9 shrink-0 items-center justify-center rounded-full border px-2 text-[10px] font-extrabold transition-all active:scale-95 ${
                   showGifPicker
                     ? 'border-[var(--accent)] bg-[var(--accent-muted)] text-[var(--accent)]'
                     : 'border-[var(--border-primary)] text-[var(--text-muted)] hover:border-[var(--border-secondary)] hover:text-[var(--text-primary)]'
@@ -1380,14 +1463,21 @@ export default function WatchPartyRoom({ partyCode = '', theater = false }) {
                 ref={chatInputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
+                onFocus={() => {
+                  // Avoid scrollTo — Chrome Android pans the visual viewport
+                }}
                 placeholder="Type a message... (@bgc for AI)"
                 maxLength={500}
-                className="min-w-0 flex-1 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-3 py-1.5 text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30"
+                enterKeyHint="send"
+                autoComplete="off"
+                inputMode="text"
+                style={{ fontSize: 16, scrollMargin: 0 }}
+                className="min-w-0 flex-1 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-3 py-2 text-base text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30"
               />
               <button
                 type="submit"
                 disabled={!draft.trim()}
-                className="shrink-0 rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-[var(--accent-dark)] active:scale-[0.95] disabled:opacity-40"
+                className="shrink-0 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-bold text-white transition-all hover:bg-[var(--accent-dark)] active:scale-[0.95] disabled:opacity-40"
               >
                 Send
               </button>

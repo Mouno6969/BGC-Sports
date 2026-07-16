@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { apiGet } from '../lib/config.js';
 import ChannelCard from '../components/ChannelCard.jsx';
+import { ChannelGridSkeleton } from '../components/Skeleton.jsx';
 
 const CATEGORY_INFO = {
   Sports: {
@@ -72,15 +73,37 @@ export default function CategoryPage() {
   };
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    apiGet(`/api/channels?group=${encodeURIComponent(group)}`)
-      .then((data) => setChannels(data.channels || []))
-      .catch(() => {
-        setError('Failed to load channels for this category.');
-        setChannels([]);
-      })
-      .finally(() => setLoading(false));
+    let alive = true;
+    const load = ({ silent = false } = {}) => {
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
+      return apiGet(`/api/channels?group=${encodeURIComponent(group)}`)
+        .then((data) => {
+          if (!alive) return;
+          setChannels(data.channels || []);
+          setError(null);
+        })
+        .catch(() => {
+          if (!alive) return;
+          if (!silent) {
+            setError('Failed to load channels for this category.');
+            setChannels([]);
+          }
+        })
+        .finally(() => {
+          if (alive) setLoading(false);
+        });
+    };
+
+    load();
+    const onPull = () => load({ silent: true });
+    window.addEventListener('bgc:pull-refresh', onPull);
+    return () => {
+      alive = false;
+      window.removeEventListener('bgc:pull-refresh', onPull);
+    };
   }, [group]);
 
   const filtered = search
@@ -120,11 +143,7 @@ export default function CategoryPage() {
       </div>
 
       {loading ? (
-        <div className="channel-grid">
-          {Array.from({ length: 10 }).map((_, i) => (
-            <div key={`skel-${i}`} className="skeleton aspect-[4/3] rounded-xl" />
-          ))}
-        </div>
+        <ChannelGridSkeleton count={10} />
       ) : error ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] py-16 text-center">
           <p className="type-body text-[var(--text-muted)]">{error}</p>

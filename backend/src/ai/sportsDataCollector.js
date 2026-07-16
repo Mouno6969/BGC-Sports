@@ -13,11 +13,64 @@ const WORLD_CUP_ID = '4429';
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer';
 const ESPN_SCOREBOARD = `${ESPN_BASE}/fifa.world/scoreboard`;
 const ESPN_NEWS = `${ESPN_BASE}/fifa.world/news`;
+const ESPN_STANDINGS = 'https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings';
 
 // Cache for expensive API calls
 const dataCache = new Map();
-const CACHE_TTL = 45 * 1000; // 45 seconds for live data
+const CACHE_TTL = 20 * 1000; // 20s for live scoreboard (matches move fast)
 const LONG_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for static data
+
+/**
+ * Normalize ESPN status.type → LIVE | FINISHED | UPCOMING | POSTPONED
+ * ESPN uses description "Second Half" / "First Half" — NOT "In Progress".
+ * Always prefer type.state: in | pre | post.
+ */
+export function mapEspnMatchStatus(statusType = {}, statusObj = {}) {
+  const name = String(statusType.name || '').toUpperCase();
+  const state = String(statusType.state || '').toLowerCase();
+  const desc = String(statusType.description || statusType.detail || '').toLowerCase();
+  const completed = Boolean(statusType.completed);
+
+  if (
+    state === 'in' ||
+    name.includes('IN_PROGRESS') ||
+    name.includes('HALFTIME') ||
+    name.includes('EXTRA_TIME') ||
+    name.includes('PENALTY') ||
+    name.includes('SECOND_HALF') ||
+    name.includes('FIRST_HALF') ||
+    /half|extra time|penalt|in progress|live/i.test(desc)
+  ) {
+    return 'LIVE';
+  }
+  if (
+    completed ||
+    state === 'post' ||
+    name.includes('FINAL') ||
+    name.includes('FULL_TIME') ||
+    name.includes('STATUS_FINAL') ||
+    /full time|final|ft-pens|aet/i.test(desc)
+  ) {
+    return 'FINISHED';
+  }
+  if (name.includes('POSTPONED') || /postponed/i.test(desc)) return 'POSTPONED';
+  if (name.includes('CANCEL')) return 'CANCELLED';
+  return 'UPCOMING';
+}
+
+function isLiveEspnRow(m) {
+  if (!m) return false;
+  if (m.statusCode === 'LIVE') return true;
+  const s = String(m.status || '').toLowerCase();
+  return (
+    s === 'live' ||
+    s === 'in progress' ||
+    s === 'halftime' ||
+    s.includes('half') ||
+    s.includes('extra') ||
+    s.includes('penalt')
+  );
+}
 
 function getCached(key) {
   const entry = dataCache.get(key);
@@ -206,42 +259,165 @@ export async function getESPNScoreboard() {
   const cached = getCached('espn_scoreboard');
   if (cached) return cached;
 
-  const data = await fetchJson(ESPN_SCOREBOARD);
+  // Prefer multi-day window so knockout slate is present, fall back to default board
+  const today = new Date();
+  const ymd = (d) =>
+    `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
+  const start = new Date(today.getTime() - 2 * 86400000);
+  const end = new Date(today.getTime() + 5 * 86400000);
+  const rangeUrl = `${ESPN_SCOREBOARD}?dates=${ymd(start)}-${ymd(end)}`;
+
+  let data = await fetchJson(rangeUrl, 10000);
+  if (!data?.events?.length) {
+    data = await fetchJson(ESPN_SCOREBOARD, 10000);
+  }
   if (!data?.events) return [];
 
   const matches = data.events.map((event) => {
-    const competition = event.competitions?.[0];
-    const competitors = competition?.competitors || [];
+    const competition = event.competitions?.[0] || {};
+    const competitors = competition.competitors || [];
     const home = competitors.find((c) => c.homeAway === 'home');
     const away = competitors.find((c) => c.homeAway === 'away');
+    const statusObj = competition.status || event.status || {};
+    const statusType = statusObj.type || {};
+    const statusCode = mapEspnMatchStatus(statusType, statusObj);
+    const note =
+      competition.altGameNote ||
+      (competition.notes || []).map((n) => n.headline).filter(Boolean).join(', ') ||
+      null;
 
     return {
       id: event.id,
       name: event.name,
-      date: event.date,
-      status: competition?.status?.type?.description || 'Scheduled',
-      statusDetail: competition?.status?.type?.detail,
-      clock: competition?.status?.displayClock,
-      period: competition?.status?.period,
+      date: event.date || competition.date || competition.startDate,
+      // Canonical code for the AI — never invent finished from a live 1-1
+      statusCode,
+      status: statusType.description || statusType.detail || statusCode,
+      statusDetail: statusType.detail || statusType.shortDetail || null,
+      statusState: statusType.state || null,
+      completed: Boolean(statusType.completed),
+      clock: statusObj.displayClock || null,
+      period: statusObj.period || null,
       home: {
         name: home?.team?.displayName,
         abbreviation: home?.team?.abbreviation,
-        score: home?.score,
+        score: home?.score != null && home?.score !== '' ? Number(home.score) : null,
+        winner: Boolean(home?.winner),
         logo: home?.team?.logo,
       },
       away: {
         name: away?.team?.displayName,
         abbreviation: away?.team?.abbreviation,
-        score: away?.score,
+        score: away?.score != null && away?.score !== '' ? Number(away.score) : null,
+        winner: Boolean(away?.winner),
         logo: away?.team?.logo,
       },
-      venue: competition?.venue?.fullName,
-      broadcasts: competition?.broadcasts?.map((b) => b.names?.join(', ')),
+      venue: competition.venue?.fullName,
+      stage: note,
+      broadcasts: competition.broadcasts?.map((b) => b.names?.join(', ')),
     };
   });
 
-  setCache('espn_scoreboard', matches);
-  return matches;
+  // Dedupe by id
+  const byId = new Map();
+  for (const m of matches) {
+    if (m?.id) byId.set(String(m.id), m);
+  }
+  const list = [...byId.values()];
+  setCache('espn_scoreboard', list);
+  return list;
+}
+
+/**
+ * Authoritative live board for the AI — prefer local /api/scores (full WC
+ * schedule), merge any ESPN rows, never replace a rich board with a sparse one.
+ */
+export async function getVerifiedWorldCupBoard() {
+  const cached = getCached('verified_wc_board');
+  // Don't serve a tiny stale board if we previously cached a sparse ESPN-only fallback
+  if (cached && cached.length >= 20) return cached;
+
+  const port = process.env.PORT || 4000;
+  const byId = new Map();
+
+  const upsert = (m) => {
+    if (!m?.home || !m?.away) return;
+    const key = m.id || `${m.home}|${m.away}|${m.timestamp || m.date || ''}`;
+    const prev = byId.get(key);
+    // Prefer rows that already have scores / finished status
+    if (prev && prev.status === 'FINISHED' && m.status !== 'FINISHED') return;
+    if (prev && prev.homeScore != null && m.homeScore == null) return;
+    byId.set(key, { ...prev, ...m, id: m.id || prev?.id });
+  };
+
+  try {
+    const data = await fetchJson(`http://127.0.0.1:${port}/api/scores`, 12000);
+    const rows = [...(data?.worldCup || []), ...(data?.matches || [])];
+    for (const m of rows) {
+      upsert({
+        id: m.id,
+        home: m.home,
+        away: m.away,
+        homeScore: m.homeScore,
+        awayScore: m.awayScore,
+        status: m.status,
+        progress: m.progress || m.statusDetail || null,
+        statusDetail: m.statusDetail || null,
+        stage: m.stage || m.round || null,
+        venue: m.venue || null,
+        timestamp: m.timestamp || null,
+        source: m.source || 'scores-api',
+      });
+    }
+  } catch (err) {
+    console.warn('[verified-board] scores API failed:', err.message);
+  }
+
+  // Always merge ESPN window (adds LIVE clocks); do not replace full WC list
+  try {
+    const espn = await getESPNScoreboard();
+    for (const m of espn) {
+      upsert({
+        id: m.id ? `espn-${m.id}` : undefined,
+        home: m.home?.name,
+        away: m.away?.name,
+        homeScore: m.home?.score,
+        awayScore: m.away?.score,
+        status: m.statusCode || 'UPCOMING',
+        progress: m.statusCode === 'LIVE' ? m.clock || m.statusDetail : m.statusDetail,
+        statusDetail: m.statusDetail,
+        stage: m.stage,
+        venue: m.venue,
+        timestamp: m.date,
+        source: 'espn-direct',
+      });
+    }
+  } catch {
+    /* ignore */
+  }
+
+  let verified = [...byId.values()];
+
+  // Sort: LIVE first, then upcoming, then finished (newest finished first)
+  const order = { LIVE: 0, UPCOMING: 1, POSTPONED: 2, FINISHED: 3 };
+  verified.sort((a, b) => {
+    const oa = order[a.status] ?? 9;
+    const ob = order[b.status] ?? 9;
+    if (oa !== ob) return oa - ob;
+    if (a.status === 'FINISHED') {
+      return (new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+    }
+    return (new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+  });
+
+  // Never cache a sparse ESPN-window-only board — full WC schedule is 50–100+ rows
+  if (verified.length >= 20) {
+    setCache('verified_wc_board', verified, CACHE_TTL);
+  } else if (verified.length) {
+    // Short cache only so we retry full /api/scores soon
+    setCache('verified_wc_board', verified, 5 * 1000);
+  }
+  return verified;
 }
 
 export async function getESPNNews() {
@@ -435,9 +611,7 @@ export async function collectFullMatchContext() {
 
   let commentaryData = [];
   if (espnMatches.length > 0) {
-    const liveESPN = espnMatches.filter(
-      (m) => m.status === 'In Progress' || m.status === 'Halftime'
-    );
+    const liveESPN = espnMatches.filter((m) => isLiveEspnRow(m));
     if (liveESPN.length > 0) {
       const commentaries = await Promise.allSettled(
         liveESPN.slice(0, 3).map((m) => getMatchCommentary(m.id))
@@ -448,8 +622,11 @@ export async function collectFullMatchContext() {
     }
   }
 
+  const verifiedBoard = await getVerifiedWorldCupBoard().catch(() => []);
+
   return {
     liveMatches,
+    verifiedBoard,
     recentResults: results.status === 'fulfilled' ? results.value : [],
     upcomingFixtures: upcoming.status === 'fulfilled' ? upcoming.value : [],
     espnScoreboard: espnMatches,
@@ -465,70 +642,103 @@ export async function collectFullMatchContext() {
 // Targeted data collection based on user query
 // ---------------------------------------------------------------------------
 
-export async function collectContextForQuery(query) {
+/**
+ * Collect sports context ONLY for tools the plan requested.
+ * @param {string} query
+ * @param {{ needsLiveScores?: boolean, needsStandings?: boolean, needsNews?: boolean, needsDeep?: boolean, needsIncident?: boolean } | null} planOpts
+ */
+export async function collectContextForQuery(query, planOpts = null) {
   const lowerQuery = query.toLowerCase();
+  const teamKeywords = extractTeamNames(lowerQuery);
+  const playerKeywords = extractPlayerNames(lowerQuery);
 
-  // Always get live scores and recent results
+  const wantsLive =
+    planOpts?.needsLiveScores === true ||
+    (planOpts == null &&
+      /\b(live|score|winning|fixture|upcoming|kick.?off|correct score)\b/i.test(lowerQuery));
+  const wantsStandings =
+    planOpts?.needsStandings === true ||
+    (planOpts == null && /\b(table|standing|group|bracket)\b/i.test(lowerQuery));
+  const wantsIncident =
+    planOpts?.needsIncident === true ||
+    /\b(yellow|red|card|coach|manager|booking|booked|sent off|why|referee|var|dissent)\b/i.test(
+      lowerQuery
+    );
+  const wantsDeep =
+    planOpts?.needsDeep === true ||
+    wantsStandings ||
+    wantsIncident ||
+    planOpts?.needsNews === true ||
+    /\b(predict|analysis|form|stats|lineup|tactics)\b/i.test(lowerQuery);
+
+  // Fast empty shell when the user did not ask for scores/context at all
+  if (planOpts && !wantsLive && !wantsStandings && !wantsDeep && !wantsIncident) {
+    return {
+      verifiedBoard: [],
+      liveMatches: [],
+      recentResults: [],
+      upcomingFixtures: [],
+      espnScoreboard: [],
+      liveCount: 0,
+      skipped: true,
+      skipReason: 'plan_no_sports_context',
+      collectedAt: new Date().toISOString(),
+    };
+  }
+
+  // Board only when live scores / prediction / incident grounding needed
+  let verifiedBoard = [];
+  if (wantsLive || wantsIncident || wantsDeep || planOpts == null) {
+    verifiedBoard = await getVerifiedWorldCupBoard().catch(() => []);
+  }
+  const liveCount = verifiedBoard.filter((m) => m.status === 'LIVE').length;
+
   const baseContext = {
-    liveMatches: await getWorldCupLiveScores(),
-    recentResults: await getWorldCupResults(),
-    upcomingFixtures: await getWorldCupUpcoming(),
+    verifiedBoard: wantsLive || wantsIncident || wantsDeep ? verifiedBoard : [],
+    liveMatches: wantsLive ? verifiedBoard.filter((m) => m.status === 'LIVE') : [],
+    recentResults: wantsLive || wantsIncident
+      ? verifiedBoard.filter((m) => m.status === 'FINISHED').slice(0, 12)
+      : [],
+    upcomingFixtures: wantsLive
+      ? verifiedBoard.filter((m) => m.status === 'UPCOMING').slice(0, 12)
+      : [],
+    espnScoreboard: [],
+    skipped: false,
   };
 
-  // If asking about a specific team
-  const teamKeywords = extractTeamNames(lowerQuery);
-  if (teamKeywords.length > 0) {
-    const teamDetails = await Promise.allSettled(
-      teamKeywords.map((t) => getTeamDetails(t))
-    );
-    baseContext.teamDetails = teamDetails
-      .filter((t) => t.status === 'fulfilled' && t.value)
-      .map((t) => t.value);
-  }
+  // ESPN scoreboard for LIVE clocks; news/standings when needed
+  if (wantsLive || wantsDeep || wantsIncident) {
+    const [espnScoreboard, standings, espnNews] = await Promise.all([
+      wantsLive || wantsIncident ? getESPNScoreboard().catch(() => []) : Promise.resolve([]),
+      wantsStandings || wantsDeep ? getWorldCupStandings().catch(() => []) : Promise.resolve([]),
+      wantsDeep || wantsIncident || planOpts?.needsNews
+        ? getESPNNews().catch(() => [])
+        : Promise.resolve([]),
+    ]);
+    baseContext.espnScoreboard = espnScoreboard;
+    if (standings?.length) baseContext.standings = standings;
+    if (espnNews?.length) baseContext.espnNews = espnNews;
 
-  // If asking about a specific player
-  const playerKeywords = extractPlayerNames(lowerQuery);
-  if (playerKeywords.length > 0) {
-    const playerDetails = await Promise.allSettled(
-      playerKeywords.map((p) => getPlayerDetails(p))
-    );
-    baseContext.playerDetails = playerDetails
-      .filter((p) => p.status === 'fulfilled' && p.value)
-      .map((p) => p.value);
-  }
+    // Commentary for LIVE games OR for finished matches matching named teams (cards etc.)
+    const liveESPN = (espnScoreboard || []).filter((m) => isLiveEspnRow(m));
+    let commentaryTargets = wantsLive ? liveESPN.slice(0, 1).map((m) => m.id) : [];
 
-  // If asking about predictions, scores, or analysis — get full context
-  if (
-    lowerQuery.includes('predict') ||
-    lowerQuery.includes('score') ||
-    lowerQuery.includes('win') ||
-    lowerQuery.includes('analysis') ||
-    lowerQuery.includes('chance') ||
-    lowerQuery.includes('odds') ||
-    lowerQuery.includes('form') ||
-    lowerQuery.includes('stats')
-  ) {
-    baseContext.espnScoreboard = await getESPNScoreboard();
-    baseContext.standings = await getWorldCupStandings();
-    baseContext.espnNews = await getESPNNews();
-  }
+    if (wantsIncident || (teamKeywords.length >= 1 && wantsDeep)) {
+      const relevant = verifiedBoard.filter((m) => {
+        if (m.status !== 'FINISHED' && m.status !== 'LIVE') return false;
+        const blob = `${m.home || ''} ${m.away || ''}`.toLowerCase();
+        return teamKeywords.some((t) => blob.includes(t));
+      });
+      for (const m of relevant.slice(0, 2)) {
+        const eid = String(m.id || '').replace(/^espn-/, '');
+        if (/^\d+$/.test(eid)) commentaryTargets.push(eid);
+      }
+    }
 
-  // If asking about live match or commentary
-  if (
-    lowerQuery.includes('live') ||
-    lowerQuery.includes('commentary') ||
-    lowerQuery.includes('happening') ||
-    lowerQuery.includes('now') ||
-    lowerQuery.includes('current')
-  ) {
-    const espnMatches = await getESPNScoreboard();
-    baseContext.espnScoreboard = espnMatches;
-    const liveESPN = espnMatches.filter(
-      (m) => m.status === 'In Progress' || m.status === 'Halftime'
-    );
-    if (liveESPN.length > 0) {
+    commentaryTargets = [...new Set(commentaryTargets.filter(Boolean))].slice(0, 2);
+    if (commentaryTargets.length) {
       const commentaries = await Promise.allSettled(
-        liveESPN.slice(0, 2).map((m) => getMatchCommentary(m.id))
+        commentaryTargets.map((id) => getMatchCommentary(id))
       );
       baseContext.commentary = commentaries
         .filter((c) => c.status === 'fulfilled')
@@ -536,18 +746,33 @@ export async function collectContextForQuery(query) {
     }
   }
 
-  // If asking about news or updates
+  if (teamKeywords.length > 0 && (wantsDeep || wantsIncident || wantsLive)) {
+    const teamDetails = await Promise.allSettled(
+      teamKeywords.slice(0, 3).map((t) => getTeamDetails(t))
+    );
+    baseContext.teamDetails = teamDetails
+      .filter((t) => t.status === 'fulfilled' && t.value)
+      .map((t) => t.value);
+  }
+
+  if (playerKeywords.length > 0 && (wantsDeep || wantsLive)) {
+    const playerDetails = await Promise.allSettled(
+      playerKeywords.slice(0, 2).map((p) => getPlayerDetails(p))
+    );
+    baseContext.playerDetails = playerDetails
+      .filter((p) => p.status === 'fulfilled' && p.value)
+      .map((p) => p.value);
+  }
+
   if (
-    lowerQuery.includes('news') ||
-    lowerQuery.includes('update') ||
-    lowerQuery.includes('latest') ||
-    lowerQuery.includes('headline')
+    (planOpts?.needsNews || /\b(news|update|latest|headline)\b/i.test(lowerQuery)) &&
+    !baseContext.bbcHeadlines
   ) {
-    baseContext.espnNews = await getESPNNews();
-    baseContext.bbcHeadlines = await getBBCSportHeadlines();
+    baseContext.bbcHeadlines = await getBBCSportHeadlines().catch(() => []);
   }
 
   baseContext.collectedAt = new Date().toISOString();
+  baseContext.liveCount = liveCount;
   return baseContext;
 }
 

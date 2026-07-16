@@ -11,12 +11,14 @@ export default function NotFoundPage() {
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
         <Link
           to="/"
+          viewTransition
           className="inline-flex min-h-[44px] items-center rounded-xl bg-[var(--accent)] px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-[var(--accent)]/20 transition-transform active:scale-[0.97]"
         >
           Go Home
         </Link>
         <Link
           to="/category/Sports"
+          viewTransition
           className="inline-flex min-h-[44px] items-center rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-6 py-2.5 text-sm font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
         >
           Browse Sports

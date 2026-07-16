@@ -1,21 +1,41 @@
 import { useState, useEffect } from 'react';
 
+function getMatches(query) {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.matchMedia(query).matches;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Custom hook that returns true if the media query matches.
- * Useful for conditional rendering based on viewport size.
+ * Subscribe to a CSS media query. Initializes from the current viewport so
+ * the first paint is correct (critical for desktop-only UI like the watch
+ * sidebar — starting at `false` left desktop users with no Live / Party /
+ * Chat / AI panel while the mobile panel stayed `lg:hidden`).
  */
 export function useMediaQuery(query) {
-  const [matches, setMatches] = useState(false);
+  const [matches, setMatches] = useState(() => getMatches(query));
 
   useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
     const media = window.matchMedia(query);
-    if (media.matches !== matches) {
-      setMatches(media.matches);
+    const onChange = () => setMatches(media.matches);
+
+    // Sync immediately (covers query changes and late layout)
+    onChange();
+
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', onChange);
+      return () => media.removeEventListener('change', onChange);
     }
-    const listener = () => setMatches(media.matches);
-    media.addEventListener('change', listener);
-    return () => media.removeEventListener('change', listener);
-  }, [matches, query]);
+
+    // Legacy Safari
+    media.addListener(onChange);
+    return () => media.removeListener(onChange);
+  }, [query]);
 
   return matches;
 }

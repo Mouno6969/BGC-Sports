@@ -1,39 +1,38 @@
 // ---------------------------------------------------------------------------
 // WorldCupSection — dedicated FIFA World Cup 2026 section on the homepage.
-// Shows World Cup results and upcoming fixtures with a highlighted trophy theme.
+// Shows full WC schedule from ESPN (via /api/scores) with local kickoff times.
 // Auto-refreshes every 60 seconds alongside the main scores.
 // ---------------------------------------------------------------------------
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { apiGet, logoUrl } from '../lib/config.js';
 import FifaLiveSection from './FifaLiveSection.jsx';
 import LiveBadge from './LiveBadge.jsx';
-
-function formatKickoff(match) {
-  if (!match.timestamp) return 'Scheduled';
-  const d = new Date(match.timestamp);
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const isToday = d.toDateString() === today.toDateString();
-  const isTomorrow = d.toDateString() === tomorrow.toDateString();
-  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (isToday) return `Today ${time}`;
-  if (isTomorrow) return `Tomorrow ${time}`;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ` ${time}`;
-}
+import JsonLd from './JsonLd.jsx';
+import { buildPageSportsGraph } from '../lib/sportsEventSchema.js';
+import { formatKickoff, localTimeHint } from '../lib/utils.js';
+import { matchCenterPath } from '../lib/matchLinks.js';
+import { MatchCardSkeleton } from './Skeleton.jsx';
+import MatchActionRow from './MatchActionRow.jsx';
+import WorldCupStandings from './WorldCupStandings.jsx';
 
 function TeamBadge({ badge, name }) {
-  if (badge) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [badge]);
+
+  if (badge && !failed) {
     return (
       <img
         src={logoUrl(badge)}
         alt={name}
         className="h-10 w-10 object-contain"
-        onError={(e) => {
-          e.target.style.display = 'none';
-          if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-        }}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
       />
     );
   }
@@ -45,8 +44,19 @@ function TeamBadge({ badge, name }) {
 }
 
 function WorldCupMatchCard({ match }) {
+  const navigate = useNavigate();
   const isLive = match.status === 'LIVE';
   const isUpcoming = match.status === 'UPCOMING';
+  const stageLabel = match.stage || match.round;
+  const location = [match.venue, match.city].filter(Boolean).join(' · ');
+  const centerPath = matchCenterPath(match);
+  const shellClass = `rounded-xl border p-4 transition-all duration-300 hover:scale-[1.02] ${
+    isLive
+      ? 'border-red-500/40 bg-gradient-to-br from-red-500/10 to-yellow-500/5 shadow-lg shadow-red-500/10'
+      : isUpcoming
+        ? 'border-yellow-500/30 bg-gradient-to-br from-yellow-500/5 to-amber-500/5'
+        : 'border-[var(--border-primary)] bg-[var(--bg-card)]'
+  } ${centerPath ? 'cursor-pointer' : ''}`;
 
   return (
     <motion.div
@@ -54,114 +64,101 @@ function WorldCupMatchCard({ match }) {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.4 }}
-      className={`rounded-xl border p-4 transition-all duration-300 hover:scale-[1.02] ${
-        isLive
-          ? 'border-red-500/40 bg-gradient-to-br from-red-500/10 to-yellow-500/5 shadow-lg shadow-red-500/10'
-          : isUpcoming
-          ? 'border-yellow-500/30 bg-gradient-to-br from-yellow-500/5 to-amber-500/5'
-          : 'border-[var(--border-primary)] bg-[var(--bg-card)]'
-      }`}
+      className={shellClass}
+      onClick={() => {
+        if (centerPath) navigate(centerPath);
+      }}
     >
-      {/* Match header */}
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {match.round && (
-            <span className="text-[9px] font-bold uppercase tracking-wider text-yellow-500/80">
-              Round {match.round}
-            </span>
-          )}
-          {match.venue && (
-            <span className="text-[9px] text-[var(--text-muted)] truncate max-w-[120px]">
-              {match.venue}
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          {stageLabel && (
+            <span className="truncate text-[9px] font-bold uppercase tracking-wider text-yellow-500/80">
+              {String(stageLabel).replace(/^FIFA World Cup,?\s*/i, '') || stageLabel}
             </span>
           )}
         </div>
-        {isLive && (
-          <LiveBadge label={match.progress ? `${match.progress}'` : 'LIVE'} />
-        )}
+        {isLive && <LiveBadge label={match.progress || 'LIVE'} />}
         {isUpcoming && (
-          <span className="rounded-full bg-yellow-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-yellow-400 ring-1 ring-yellow-500/20 whitespace-nowrap">
-            {formatKickoff(match)}
+          <span className="shrink-0 whitespace-nowrap rounded-full bg-yellow-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-yellow-400 ring-1 ring-yellow-500/20">
+            {formatKickoff(match, { style: 'medium' })}
           </span>
         )}
         {match.status === 'FINISHED' && (
-          <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">
-            Full Time
+          <span className="shrink-0 rounded-full bg-slate-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">
+            {match.statusDetail || 'Full Time'}
           </span>
         )}
       </div>
 
-      {/* Teams & Score */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
-          <div className="relative">
-            <TeamBadge badge={match.homeBadge} name={match.home} />
-            <div className="hidden h-10 w-10 items-center justify-center rounded-full bg-yellow-500/10 text-sm font-bold text-yellow-400">
-              {(match.home || '?').charAt(0)}
-            </div>
-          </div>
-          <span className="text-[11px] font-semibold text-[var(--text-primary)] text-center truncate w-full">
+        <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
+          <TeamBadge badge={match.homeBadge} name={match.home} />
+          <span className="w-full truncate text-center text-[11px] font-semibold text-[var(--text-primary)]">
             {match.home}
           </span>
         </div>
-
-        <div className="flex flex-col items-center gap-1 shrink-0">
+        <div className="flex shrink-0 flex-col items-center gap-1">
           {!isUpcoming && match.homeScore !== null ? (
-            <span className={`text-xl font-extrabold px-4 py-1.5 rounded-lg ${
-              isLive ? 'text-red-400 bg-red-500/10 ring-1 ring-red-500/20' : 'text-[var(--text-primary)] bg-[var(--bg-tertiary)]'
-            }`}>
+            <span
+              className={`rounded-lg px-4 py-1.5 text-xl font-extrabold ${
+                isLive
+                  ? 'bg-red-500/10 text-red-400 ring-1 ring-red-500/20'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
+              }`}
+            >
               {match.homeScore} - {match.awayScore}
             </span>
           ) : (
-            <span className="text-sm font-bold text-yellow-400/60 px-3 py-1">VS</span>
+            <span className="px-3 py-1 text-sm font-bold text-yellow-400/60">VS</span>
           )}
           {isLive && (
-            <span className="text-[9px] font-bold text-red-400 uppercase animate-pulse">● Live</span>
+            <span className="animate-pulse text-[9px] font-bold uppercase text-red-400">● Live</span>
+          )}
+          {!isLive && match.timestamp && (
+            <span className="whitespace-nowrap text-[9px] text-[var(--text-muted)]">
+              {formatKickoff(match, { style: 'short' })}
+            </span>
           )}
         </div>
-
-        <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
-          <div className="relative">
-            <TeamBadge badge={match.awayBadge} name={match.away} />
-            <div className="hidden h-10 w-10 items-center justify-center rounded-full bg-yellow-500/10 text-sm font-bold text-yellow-400">
-              {(match.away || '?').charAt(0)}
-            </div>
-          </div>
-          <span className="text-[11px] font-semibold text-[var(--text-primary)] text-center truncate w-full">
+        <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
+          <TeamBadge badge={match.awayBadge} name={match.away} />
+          <span className="w-full truncate text-center text-[11px] font-semibold text-[var(--text-primary)]">
             {match.away}
           </span>
         </div>
       </div>
+
+      {(location || match.broadcasts?.length > 0) && (
+        <div className="mt-2.5 flex flex-col gap-0.5 border-t border-yellow-500/10 pt-2">
+          {location && (
+            <p className="truncate text-[9px] text-[var(--text-muted)]" title={location}>
+              📍 {location}
+            </p>
+          )}
+          {match.broadcasts?.length > 0 && (
+            <p className="truncate text-[9px] text-[var(--text-muted)]" title={match.broadcasts.join(', ')}>
+              📺 {match.broadcasts.slice(0, 3).join(' · ')}
+            </p>
+          )}
+        </div>
+      )}
+
+      <MatchActionRow match={match} stopPropagation pitch />
+      {centerPath && (
+        <p className="mt-1.5 text-center text-[9px] font-semibold text-slate-400">
+          Tap card for Match Center
+        </p>
+      )}
     </motion.div>
   );
 }
 
-function SkeletonCard() {
-  return (
-    <div className="rounded-xl border border-yellow-500/10 bg-[var(--bg-card)] p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="skeleton h-3 w-16 rounded" />
-        <div className="skeleton h-4 w-14 rounded-full" />
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex flex-col items-center gap-1 flex-1">
-          <div className="skeleton h-10 w-10 rounded-full" />
-          <div className="skeleton h-3 w-14 rounded" />
-        </div>
-        <div className="skeleton h-9 w-16 rounded-lg" />
-        <div className="flex flex-col items-center gap-1 flex-1">
-          <div className="skeleton h-10 w-10 rounded-full" />
-          <div className="skeleton h-3 w-14 rounded" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function WorldCupSection() {
+export default function WorldCupSection({ pitch = false }) {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
+  // matches | standings — standings embeds groups + knockout bracket
+  const [sectionView, setSectionView] = useState('matches');
 
   useEffect(() => {
     let alive = true;
@@ -179,9 +176,12 @@ export default function WorldCupSection() {
     };
     load();
     const interval = setInterval(load, 60000);
+    const onPull = () => load();
+    window.addEventListener('bgc:pull-refresh', onPull);
     return () => {
       alive = false;
       clearInterval(interval);
+      window.removeEventListener('bgc:pull-refresh', onPull);
     };
   }, []);
 
@@ -195,11 +195,22 @@ export default function WorldCupSection() {
   const liveCount = matches.filter((m) => m.status === 'LIVE').length;
   const upcomingCount = matches.filter((m) => m.status === 'UPCOMING').length;
 
-  // Don't render if no World Cup data available
-  if (!loading && matches.length === 0) return null;
+  // SportsEvent JSON-LD for Google rich results (kickoff, teams, venue)
+  const sportsJsonLd = useMemo(
+    () =>
+      matches.length
+        ? buildPageSportsGraph(matches, {
+            listName: 'FIFA World Cup 2026 matches',
+            pagePath: '/?tab=worldcup',
+          })
+        : null,
+    [matches]
+  );
 
+  // Always show section shell (standings may load even if fixtures are empty)
   return (
-    <section className="space-y-4">
+    <section className="space-y-3" itemScope itemType="https://schema.org/ItemList">
+      <JsonLd id="worldcup-sports-events" data={sportsJsonLd} />
       {/* Section Header with World Cup branding */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
@@ -207,62 +218,97 @@ export default function WorldCupSection() {
             <span className="text-lg">🏆</span>
           </div>
           <div>
-            <h2 className="type-h2 text-[var(--text-primary)] flex items-center gap-2 flex-wrap">
+            <h2 className={`type-h2 flex items-center gap-2 flex-wrap ${pitch ? 'text-white' : 'text-[var(--text-primary)]'}`}>
               FIFA World Cup 2026
               {liveCount > 0 && <LiveBadge label={`${liveCount} LIVE`} />}
             </h2>
-            <p className="text-[10px] text-[var(--text-muted)]">
+            <p className={`text-[10px] ${pitch ? 'text-slate-300' : 'text-[var(--text-muted)]'}`}>
               {upcomingCount > 0
-                ? `${upcomingCount} upcoming match${upcomingCount > 1 ? 'es' : ''} · USA, Mexico & Canada`
-                : 'Real-time scores & fixtures · USA, Mexico & Canada'}
+                ? `${upcomingCount} upcoming · USA, Mexico & Canada · ${localTimeHint()}`
+                : `Scores, standings & bracket · ${localTimeHint()}`}
             </p>
           </div>
         </div>
 
-        <div className="flex gap-2">
-          {[
-            { id: 'all', label: 'All' },
-            { id: 'live', label: '🔴 Live' },
-            { id: 'upcoming', label: '🕐 Upcoming' },
-            { id: 'results', label: '✓ Results' },
-          ].map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setActiveFilter(f.id)}
-              className={`rounded-full px-3 py-1 text-[10px] font-bold transition-all ${
-                activeFilter === f.id
-                  ? 'bg-yellow-500/10 text-yellow-400 ring-1 ring-yellow-500/30'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Primary section switcher */}
+          <div className="flex gap-1 rounded-full border border-yellow-500/20 bg-black/20 p-0.5">
+            {[
+              { id: 'matches', label: 'Fixtures' },
+              { id: 'standings', label: '📊 Table' },
+            ].map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                data-haptic="selection"
+                data-haptic-tab="1"
+                onClick={() => setSectionView(v.id)}
+                className={`rounded-full px-3 py-1 text-[10px] font-bold transition-all ${
+                  sectionView === v.id
+                    ? 'bg-yellow-500/15 text-yellow-400 ring-1 ring-yellow-500/35'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+
+          {sectionView === 'matches' && (
+            <div className="flex gap-2">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'live', label: '🔴 Live' },
+                { id: 'upcoming', label: '🕐 Upcoming' },
+                { id: 'results', label: '✓ Results' },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  data-haptic="selection"
+                  data-haptic-tab="1"
+                  onClick={() => setActiveFilter(f.id)}
+                  className={`rounded-full px-3 py-1 text-[10px] font-bold transition-all ${
+                    activeFilter === f.id
+                      ? 'bg-yellow-500/10 text-yellow-400 ring-1 ring-yellow-500/30'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      <FifaLiveSection />
-
-      {/* Match Grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <SkeletonCard key={i} />
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-yellow-500/10 bg-[var(--bg-card)] p-8 text-center">
-          <p className="text-sm text-[var(--text-muted)]">
-            No {activeFilter !== 'all' ? activeFilter : ''} World Cup matches available right now.
-          </p>
-        </div>
+      {sectionView === 'standings' ? (
+        <WorldCupStandings pitch={pitch} />
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((match) => (
-            <WorldCupMatchCard key={match.id} match={match} />
-          ))}
-        </div>
+        <>
+          <FifaLiveSection pitch={pitch} />
+
+          {/* Match Grid */}
+          {loading ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" role="status" aria-label="Loading matches">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <MatchCardSkeleton key={i} worldCup />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-xl border border-yellow-500/10 bg-[var(--bg-card)] p-8 text-center">
+              <p className="text-sm text-[var(--text-muted)]">
+                No {activeFilter !== 'all' ? activeFilter : ''} World Cup matches available right now.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map((match) => (
+                <WorldCupMatchCard key={match.id} match={match} />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </section>
   );

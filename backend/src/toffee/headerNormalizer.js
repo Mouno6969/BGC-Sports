@@ -37,28 +37,29 @@ export function buildBrowserHeaders(targetUrl, sessionHeaders = {}) {
   }
 
   const headers = {
-    'User-Agent': normalized['User-Agent'] || toffeeConfig.defaultUserAgent,
+    'User-Agent':
+      normalized['User-Agent']
+      || toffeeConfig.defaultUserAgent
+      || 'Toffee (Linux;Android 14) AndroidXMedia3/1.1.1/64103898/4d2ec9b8c7534adc',
     Referer: normalized.Referer || toffeeConfig.defaultReferer,
     Accept: '*/*',
     'Accept-Language': toffeeConfig.acceptLanguage,
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Sec-CH-UA': toffeeConfig.clientHintUa,
-    'Sec-CH-UA-Mobile': '?1',
-    'Sec-CH-UA-Platform': '"Android"',
-    'Sec-Fetch-Site': 'cross-site',
-    'Sec-Fetch-Mode': 'no-cors',
-    'Sec-Fetch-Dest': 'empty',
+    // identity — free proxies often break gzip
+    'Accept-Encoding': 'identity',
     Connection: 'keep-alive',
     'Cache-Control': 'no-cache',
     Pragma: 'no-cache',
   };
 
-  if (host.includes('toffeelive.com') && !targetUrl.includes('hdntl=')) {
+  if (host.includes('toffeelive.com')) {
     if (normalized.Cookie) headers.Cookie = normalized.Cookie;
-    if (normalized['client-api-header']) headers['client-api-header'] = normalized['client-api-header'];
-    headers.Host = normalized.Host || host;
+    if (normalized['client-api-header']) {
+      headers['client-api-header'] = normalized['client-api-header'];
+    }
+    // Host header is set automatically by node-fetch from URL; only force when needed
+    if (normalized.Host) headers.Host = normalized.Host;
   } else if (host.includes('sm-monirul.top') || host.includes('pages.dev')) {
-    headers.Host = normalized.Host || host;
+    if (normalized.Host) headers.Host = normalized.Host;
   }
 
   return headers;

@@ -15,6 +15,7 @@
 
 const PROFILE_KEY = 'bgc_profile';
 const GUEST_NAME_KEY = 'bgc_guest_name';
+const PREDICTOR_ID_KEY = 'bgc_predictor_id';
 const PROFILE_EVENT = 'bgc:profile-updated';
 
 export const MAX_NAME_LEN = 24;
@@ -122,6 +123,26 @@ export function getEffectiveName() {
 /** The avatar data URL if set, else empty string. */
 export function getEffectiveAvatar() {
   return getProfile().avatar || '';
+}
+
+/**
+ * Stable anonymous id for the prediction leaderboard (no account required).
+ * Persisted in localStorage so points accumulate across visits on this device.
+ */
+export function getPredictorId() {
+  try {
+    let id = localStorage.getItem(PREDICTOR_ID_KEY);
+    if (id && /^[a-zA-Z0-9_-]{8,64}$/.test(id)) return id;
+    id =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID().replace(/-/g, '')
+        : `u_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+    id = String(id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+    localStorage.setItem(PREDICTOR_ID_KEY, id);
+    return id;
+  } catch {
+    return `u_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  }
 }
 
 // ---- change notifications (same tab) --------------------------------------

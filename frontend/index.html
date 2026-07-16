@@ -3,16 +3,58 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
+    <!-- resizes-content: Chrome shrinks the layout above the keyboard so
+         position:fixed; bottom:0 natural sits above it (simplest reliable path). -->
+    <!-- maximum-scale=1 + 16px chat inputs: no focus-zoom. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#0B1120" />
-    <meta name="description" content="BGC Sports — Watch live sports channels, cricket, football, FIFA, NBA and more. Stream sports channels live for free." />
+    <meta name="description" content="BGC Sports — Watch live sports channels, cricket, football, FIFA World Cup, NBA and more. Free live streams, match times, scores and venues." />
+    <meta name="keywords" content="live sports, FIFA World Cup, football scores, free stream, World Cup matches, cricket, NBA" />
+    <link rel="canonical" href="https://preview.cryptobgc.eu.cc/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="BGC Sports — Live Sports Streaming" />
+    <meta property="og:description" content="Watch FIFA World Cup and live sports free. Match times, teams, venues and live scores." />
+    <meta property="og:url" content="https://preview.cryptobgc.eu.cc/" />
+    <meta property="og:image" content="https://preview.cryptobgc.eu.cc/logo.png" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="BGC Sports" />
     <link rel="apple-touch-icon" href="/logo.png" />
-    <title>BGC Sports — Live Sports Streaming</title>
+    <title>BGC Sports — Live Sports Streaming | FIFA World Cup & Scores</title>
+    <!-- Static Organization JSON-LD (SportsEvent nodes are injected dynamically from match data) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://preview.cryptobgc.eu.cc/#organization",
+          "name": "BGC Sports",
+          "url": "https://preview.cryptobgc.eu.cc/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://preview.cryptobgc.eu.cc/logo.png"
+          },
+          "description": "Live sports streaming platform for FIFA World Cup, football scores and free sports channels."
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://preview.cryptobgc.eu.cc/#website",
+          "url": "https://preview.cryptobgc.eu.cc/",
+          "name": "BGC Sports",
+          "publisher": { "@id": "https://preview.cryptobgc.eu.cc/#organization" },
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://preview.cryptobgc.eu.cc/?tab=channels&q={search_term_string}",
+            "query-input": "required name=search_term_string"
+          }
+        }
+      ]
+    }
+    </script>
     <!-- Fonts: Montserrat (display) + Inter (body) + JetBrains Mono (code) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

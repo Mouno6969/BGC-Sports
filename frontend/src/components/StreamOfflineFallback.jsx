@@ -3,6 +3,8 @@
 // ---------------------------------------------------------------------------
 import { Link } from 'react-router-dom';
 import LiveBadge from './LiveBadge.jsx';
+import { OfflineAltSkeleton } from './Skeleton.jsx';
+import { logoUrl } from '../lib/config.js';
 
 function channelWatchUrl(ch, source = '') {
   const params = new URLSearchParams({
@@ -38,10 +40,8 @@ export default function StreamOfflineFallback({
       </div>
 
       {loading ? (
-        <div className="w-full space-y-2">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="skeleton h-12 w-full rounded-xl" />
-          ))}
+        <div className="w-full">
+          <OfflineAltSkeleton count={3} />
         </div>
       ) : alternatives.length > 0 ? (
         <div className="w-full space-y-2">
@@ -53,7 +53,13 @@ export default function StreamOfflineFallback({
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--bg-tertiary)]">
                 {ch.logo ? (
-                  <img src={ch.logo} alt="" className="h-full w-full object-contain p-0.5" />
+                  <img
+                    src={logoUrl(ch.logo)}
+                    alt=""
+                    className="h-full w-full object-contain p-0.5"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
                 ) : (
                   <svg className="h-4 w-4 text-[var(--accent)]" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M8 5v14l11-7z" />

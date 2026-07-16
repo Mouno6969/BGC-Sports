@@ -1,51 +1,110 @@
 // ---------------------------------------------------------------------------
-// Entry point — wraps the app with Router and ThemeProvider.
-// Multi-page routing: Home, Watch (player), Category, Admin
+// Entry point — data router (RouterProvider) so Link/navigate viewTransition
+// uses the View Transitions API for page + shared-element morphs.
 // ---------------------------------------------------------------------------
 import { StrictMode, lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import {
+  createBrowserRouter,
+  RouterProvider,
+  Outlet,
+  useLocation,
+  useNavigation,
+} from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext.jsx';
 import Layout from './components/Layout.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
+import { PageSkeleton } from './components/Skeleton.jsx';
+import { initErrorTracker } from './lib/errorTracker.js';
+import { installGlobalHaptics } from './lib/haptics.js';
+import { preloadWatchPage } from './lib/viewTransitions.js';
 import './index.css';
+
+// Start client error reporting ASAP (backend intake + optional Sentry)
+initErrorTracker();
+// Subtle Vibration API feedback on buttons / tabs / nav (mobile only)
+installGlobalHaptics();
 
 const HomePage = lazy(() => import('./pages/HomePage.jsx'));
 const WatchPage = lazy(() => import('./pages/WatchPage.jsx'));
 const CategoryPage = lazy(() => import('./pages/CategoryPage.jsx'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx'));
+const MatchCenterPage = lazy(() => import('./pages/MatchCenterPage.jsx'));
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage.jsx'));
 
+/** Route-aware Suspense fallback — skeleton matches destination layout. */
 function PageLoader() {
+  const location = useLocation();
+  const navigation = useNavigation();
+  const pathname = navigation.location?.pathname || location.pathname;
+  let variant = 'home';
+  if (pathname.startsWith('/watch')) variant = 'watch';
+  else if (pathname.startsWith('/match')) variant = 'match';
+  else if (pathname.startsWith('/profile')) variant = 'profile';
+  else if (pathname.startsWith('/category')) variant = 'category';
+  return <PageSkeleton variant={variant} />;
+}
+
+function SuspenseOutlet() {
   return (
-    <div className="page-container flex min-h-[40vh] items-center justify-center">
-      <div className="h-9 w-9 animate-spin rounded-full border-2 border-[var(--accent)]/30 border-t-[var(--accent)]" role="status" aria-label="Loading" />
-    </div>
+    <Suspense fallback={<PageLoader />}>
+      <Outlet />
+    </Suspense>
   );
+}
+
+const router = createBrowserRouter([
+  {
+    element: <SuspenseOutlet />,
+    children: [
+      {
+        element: <Layout />,
+        children: [
+          { path: '/', element: <HomePage /> },
+          { path: '/watch', element: <WatchPage /> },
+          { path: '/watch/:slug', element: <WatchPage /> },
+          { path: '/category/:group', element: <CategoryPage /> },
+          { path: '/profile', element: <ProfilePage /> },
+          { path: '/match/:slug', element: <MatchCenterPage /> },
+          { path: '*', element: <NotFoundPage /> },
+        ],
+      },
+      { path: '/admin', element: <AdminPage /> },
+    ],
+  },
+]);
+
+// Warm the watch chunk in idle time so card → player morphs hit a ready player.
+if (typeof window !== 'undefined') {
+  const warm = () => {
+    preloadWatchPage().catch(() => {});
+  };
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(warm, { timeout: 4000 });
+  } else {
+    window.setTimeout(warm, 2000);
+  }
 }
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    // Cache-bust the SW URL so browsers fetch the latest controller after deploys.
+    navigator.serviceWorker
+      .register('/sw.js?v=18')
+      .then((reg) => {
+        reg.update().catch(() => {});
+      })
+      .catch(() => {});
   });
 }
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <ThemeProvider>
-      <BrowserRouter>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route element={<Layout />}>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/watch" element={<WatchPage />} />
-              <Route path="/watch/:slug" element={<WatchPage />} />
-              <Route path="/category/:group" element={<CategoryPage />} />
-              <Route path="*" element={<NotFoundPage />} />
-            </Route>
-            <Route path="/admin" element={<AdminPage />} />
-          </Routes>
-        </Suspense>
-      </BrowserRouter>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <RouterProvider router={router} />
+      </ThemeProvider>
+    </ErrorBoundary>
   </StrictMode>
 );

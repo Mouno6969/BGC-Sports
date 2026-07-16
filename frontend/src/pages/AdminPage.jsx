@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
-// AdminPage — stream management panel with redesigned UI matching FoxSports style.
+// AdminPage — stream management + client error feed for production visibility.
 // ---------------------------------------------------------------------------
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiGet, apiPost } from '../lib/config.js';
 
@@ -13,6 +13,27 @@ export default function AdminPage() {
   const [type, setType] = useState('hls');
   const [status, setStatus] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState([]);
+  const [errorStats, setErrorStats] = useState(null);
+  const [errorsLoading, setErrorsLoading] = useState(false);
+
+  const loadErrors = useCallback(async () => {
+    if (!password) return;
+    setErrorsLoading(true);
+    try {
+      const headers = { 'x-admin-password': password };
+      const [list, stats] = await Promise.all([
+        apiGet('/api/errors?limit=40', headers),
+        apiGet('/api/errors/stats', headers),
+      ]);
+      setErrors(list.events || []);
+      setErrorStats(stats);
+    } catch {
+      // leave existing
+    } finally {
+      setErrorsLoading(false);
+    }
+  }, [password]);
 
   useEffect(() => {
     if (!authed) return;
@@ -23,7 +44,10 @@ export default function AdminPage() {
         setType(d.stream.type || 'hls');
       })
       .catch(() => {});
-  }, [authed, password]);
+    loadErrors();
+    const t = setInterval(loadErrors, 30000);
+    return () => clearInterval(t);
+  }, [authed, password, loadErrors]);
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -132,10 +156,10 @@ export default function AdminPage() {
           </Link>
         </div>
       </header>
-      <div className="flex flex-1 items-center justify-center p-4">
+      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 p-4 py-8">
         <form
           onSubmit={handleSave}
-          className="w-full max-w-lg space-y-6 rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-7"
+          className="w-full space-y-6 rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-7"
         >
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 ring-1 ring-accent/20">
@@ -195,6 +219,77 @@ export default function AdminPage() {
             {saving ? 'Saving...' : 'Update stream (broadcast to all viewers)'}
           </button>
         </form>
+
+        {/* Client error feed */}
+        <section className="w-full space-y-4 rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-7">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display text-lg font-extrabold text-[var(--text-primary)]">
+                Client errors
+              </h2>
+              <p className="text-[11px] text-[var(--text-muted)]">
+                JS crashes · failed APIs · stream load failures (last {errorStats?.buffered ?? errors.length} buffered)
+                {errorStats?.byKind && (
+                  <span className="ml-1">
+                    · {Object.entries(errorStats.byKind).map(([k, v]) => `${k}:${v}`).join(' ')}
+                  </span>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={loadErrors}
+              disabled={errorsLoading}
+              className="rounded-full bg-[var(--bg-tertiary)] px-3 py-1.5 text-[11px] font-bold text-[var(--text-secondary)] ring-1 ring-[var(--border-primary)] hover:text-[var(--text-primary)] disabled:opacity-50"
+            >
+              {errorsLoading ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
+
+          {errors.length === 0 ? (
+            <p className="rounded-xl bg-[var(--bg-tertiary)] px-4 py-6 text-center text-sm text-[var(--text-muted)]">
+              No client errors reported yet. They appear here automatically from production browsers.
+            </p>
+          ) : (
+            <ul className="max-h-[28rem] space-y-2 overflow-y-auto">
+              {errors.map((ev) => (
+                <li
+                  key={ev.id}
+                  className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-tertiary)]/60 px-3 py-2.5"
+                >
+                  <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wide">
+                    <span
+                      className={
+                        ev.level === 'error' || ev.level === 'fatal'
+                          ? 'text-red-400'
+                          : 'text-amber-400'
+                      }
+                    >
+                      {ev.kind}
+                    </span>
+                    <span className="text-[var(--text-muted)]">{ev.level}</span>
+                    <span className="text-[var(--text-muted)] font-normal normal-case">
+                      {ev.receivedAt ? new Date(ev.receivedAt).toLocaleString() : ''}
+                    </span>
+                    {ev.context?.path && (
+                      <span className="truncate font-mono font-normal normal-case text-[var(--text-muted)]">
+                        {ev.context.path}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-sm text-[var(--text-primary)] break-words">{ev.message}</p>
+                  {(ev.extra?.channelName || ev.extra?.streamUrl || ev.status != null) && (
+                    <p className="mt-0.5 text-[10px] text-[var(--text-muted)] truncate">
+                      {ev.extra?.channelName && <span>{ev.extra.channelName} · </span>}
+                      {ev.extra?.streamUrl && <span>{ev.extra.streamUrl} · </span>}
+                      {ev.status != null && <span>HTTP {ev.status}</span>}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </div>
   );

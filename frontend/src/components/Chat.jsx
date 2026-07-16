@@ -42,6 +42,8 @@ export default function Chat() {
   const [replyTo, setReplyTo] = useState(null); // { id, username, color, text, isAI }
   const [typingUsers, setTypingUsers] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
+  // BGC AI phases for @bgc replies: searching → thinking (no tool names in UI)
+  const [aiPhase, setAiPhase] = useState(null);
   const listRef = useRef(null);
   const typingTimerRef = useRef(null);
   const emojiPickerRef = useRef(null);
@@ -91,17 +93,34 @@ export default function Chat() {
         prev.map((m) => (m.id === messageId ? { ...m, reactions } : m))
       );
     }
-    function onTyping({ username, isTyping: typing }) {
-      if (typing === false) {
-        setTypingUsers(prev => prev.filter(u => u !== username));
+    function onTyping({ username, isTyping: typing, phase }) {
+      // Dedicated status for BGC AI (searching first, then typing)
+      if (username === 'BGC AI') {
+        if (!typing || phase === 'idle') {
+          setAiPhase(null);
+          setTypingUsers((prev) => prev.filter((u) => u !== username));
+          return;
+        }
+        if (phase === 'searching' || phase === 'translating' || phase === 'thinking') {
+          setAiPhase(phase);
+        } else {
+          setAiPhase('thinking');
+        }
+        // Don't also list BGC AI in the generic "X is typing" line
+        setTypingUsers((prev) => prev.filter((u) => u !== username));
         return;
       }
-      setTypingUsers(prev => {
+
+      if (typing === false) {
+        setTypingUsers((prev) => prev.filter((u) => u !== username));
+        return;
+      }
+      setTypingUsers((prev) => {
         if (prev.includes(username)) return prev;
         return [...prev, username];
       });
       setTimeout(() => {
-        setTypingUsers(prev => prev.filter(u => u !== username));
+        setTypingUsers((prev) => prev.filter((u) => u !== username));
       }, 3000);
     }
     function onError({ error }) {
@@ -271,7 +290,8 @@ export default function Chat() {
             onChange={(e) => setNameInput(e.target.value)}
             placeholder={`Your name (or join as ${getGuestName()})`}
             maxLength={24}
-            className="input-field text-center"
+            className="input-field w-full text-center text-base"
+            style={{ fontSize: 16 }}
           />
           <button type="submit" className="btn-primary w-full">Enter Chat</button>
           <p className="text-center text-[10px] text-slate-500">
@@ -285,9 +305,9 @@ export default function Chat() {
 
   // ----- Chat screen --------------------------------------------------------
   return (
-    <div className="flex h-full flex-col relative">
-      {/* Header — subtle accent gradient strip */}
-      <div className="flex items-center justify-between border-b border-[var(--border-primary)] bg-gradient-to-r from-[var(--accent-muted)] to-transparent px-4 py-2.5">
+    <div className="chat-panel-root relative" data-chat-root>
+      {/* Header — subtle accent gradient strip (hidden while keyboard open) */}
+      <div className="chat-panel-header flex shrink-0 items-center justify-between border-b border-[var(--border-primary)] bg-gradient-to-r from-[var(--accent-muted)] to-transparent px-4 py-2.5">
         <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[var(--text-primary)]">
           <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--accent-muted)]">
             <svg className="h-3.5 w-3.5 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -303,7 +323,7 @@ export default function Chat() {
       </div>
 
       {/* Messages */}
-      <div ref={listRef} className="scrollbar-thin flex-1 space-y-2.5 overflow-y-auto px-4 py-3">
+      <div ref={listRef} className="chat-panel-messages scrollbar-thin space-y-2.5 px-4 py-3">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent-muted)]">
@@ -463,7 +483,57 @@ export default function Chat() {
         </AnimatePresence>
       </div>
 
-      {/* Typing indicator */}
+      {/* BGC AI: searching indicator, then typing — no tool/provider names */}
+      <AnimatePresence mode="wait">
+        {aiPhase === 'searching' && (
+          <motion.div
+            key="bgc-searching"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -2 }}
+            className="flex items-center gap-2 px-4 py-1.5"
+          >
+            <span className="relative flex h-3 w-3 items-center justify-center">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400/40" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sky-400" />
+            </span>
+            <span className="text-[11px] font-medium text-sky-400/90">BGC AI is searching…</span>
+          </motion.div>
+        )}
+        {aiPhase === 'thinking' && (
+          <motion.div
+            key="bgc-thinking"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -2 }}
+            className="flex items-center gap-1.5 px-4 py-1.5"
+          >
+            <span className="inline-flex gap-0.5">
+              <span className="inline-block h-1 w-1 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="inline-block h-1 w-1 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="inline-block h-1 w-1 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+            </span>
+            <span className="text-[11px] font-medium text-amber-500/90">BGC AI is typing…</span>
+          </motion.div>
+        )}
+        {aiPhase === 'translating' && (
+          <motion.div
+            key="bgc-translating"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -2 }}
+            className="flex items-center gap-2 px-4 py-1.5"
+          >
+            <span className="relative flex h-3 w-3 items-center justify-center">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400/40" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-violet-400" />
+            </span>
+            <span className="text-[11px] font-medium text-violet-400/90">BGC AI is translating…</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Other users typing */}
       <AnimatePresence>
         {typingUsers.length > 0 && (
           <motion.div
@@ -482,11 +552,12 @@ export default function Chat() {
         )}
       </AnimatePresence>
 
-      {/* Quick emojis */}
-      <div className="flex flex-wrap gap-1 border-t border-[var(--border-primary)] px-3 pt-2">
+      {/* Quick emojis — hidden while soft keyboard is open (see body.keyboard-open) */}
+      <div className="chat-composer-extras flex flex-wrap gap-1 border-t border-[var(--border-primary)] px-3 pt-2">
         {QUICK_EMOJIS.map((e) => (
           <button
             key={e}
+            type="button"
             onClick={() => setDraft((d) => d + e)}
             className="rounded-lg px-1.5 py-0.5 text-base transition-all hover:scale-110 hover:bg-[var(--bg-tertiary)] active:scale-95"
           >
@@ -504,7 +575,7 @@ export default function Chat() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
             transition={{ duration: 0.2 }}
-            className="absolute bottom-16 left-2 right-2 z-20 rounded-xl border border-ink-500/50 bg-ink-800 shadow-xl overflow-hidden"
+            className="chat-composer-extras absolute bottom-16 left-2 right-2 z-20 overflow-hidden rounded-xl border border-ink-500/50 bg-ink-800 shadow-xl"
           >
             {/* Category tabs */}
             <div className="flex border-b border-ink-600/50 overflow-x-auto scrollbar-thin">
@@ -555,8 +626,10 @@ export default function Chat() {
               autoFocus
             />
             {gifLoading && (
-              <div className="flex h-32 items-center justify-center">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+              <div className="grid max-h-52 grid-cols-2 gap-2" role="status" aria-label="Loading GIFs">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="skeleton aspect-video w-full rounded-lg" />
+                ))}
               </div>
             )}
             {!gifLoading && gifError && (
@@ -617,24 +690,25 @@ export default function Chat() {
         )}
       </AnimatePresence>
 
-      {/* Composer */}
-      <form onSubmit={handleSend} className="flex items-center gap-1.5 border-t border-[var(--border-primary)] bg-[var(--bg-tertiary)]/40 p-2.5">
-        {/* Emoji button */}
+      {/* Composer — sticky bottom; 16px font prevents iOS focus-zoom */}
+      <form
+        onSubmit={handleSend}
+        className="chat-panel-composer flex items-center gap-1.5 border-t border-[var(--border-primary)] bg-[var(--bg-tertiary)]/95 p-2.5 backdrop-blur-sm"
+      >
         <button
           type="button"
-          onClick={() => { setShowEmojiPicker(v => !v); setShowGifPicker(false); }}
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-all active:scale-95 ${
+          onClick={() => { setShowEmojiPicker((v) => !v); setShowGifPicker(false); }}
+          className={`chat-composer-extras flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all active:scale-95 ${
             showEmojiPicker ? 'border-[var(--accent)] bg-[var(--accent-muted)] text-[var(--accent)]' : 'border-[var(--border-primary)] text-[var(--text-muted)] hover:border-[var(--border-secondary)] hover:text-[var(--text-primary)]'
           }`}
           title="Emoji picker"
         >
           😊
         </button>
-        {/* GIF button */}
         <button
           type="button"
-          onClick={() => { setShowGifPicker(v => !v); setShowEmojiPicker(false); }}
-          className={`flex h-9 shrink-0 items-center justify-center rounded-full border px-2.5 text-[10px] font-extrabold transition-all active:scale-95 ${
+          onClick={() => { setShowGifPicker((v) => !v); setShowEmojiPicker(false); }}
+          className={`chat-composer-extras flex h-10 shrink-0 items-center justify-center rounded-full border px-2.5 text-[10px] font-extrabold transition-all active:scale-95 ${
             showGifPicker ? 'border-[var(--accent)] bg-[var(--accent-muted)] text-[var(--accent)]' : 'border-[var(--border-primary)] text-[var(--text-muted)] hover:border-[var(--border-secondary)] hover:text-[var(--text-primary)]'
           }`}
           title="GIF picker"
@@ -645,14 +719,26 @@ export default function Chat() {
           ref={inputRef}
           value={draft}
           onChange={handleDraftChange}
-          placeholder="Say something… (type @bgc for AI analysis)"
+          onFocus={() => {
+            setShowEmojiPicker(false);
+            setShowGifPicker(false);
+            // Do NOT scrollIntoView / window.scrollTo — Chrome Android pans the
+            // visual viewport and yanks the fixed composer under the keyboard.
+          }}
+          placeholder="Say something… (@bgc for AI)"
           maxLength={500}
-          className="min-w-0 flex-1 rounded-full border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-2.5 text-sm text-[var(--text-primary)] outline-none transition-all duration-200 placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30"
+          enterKeyHint="send"
+          autoComplete="off"
+          autoCorrect="on"
+          autoCapitalize="sentences"
+          inputMode="text"
+          style={{ fontSize: 16, scrollMargin: 0 }}
+          className="min-w-0 flex-1 rounded-full border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-2.5 text-base text-[var(--text-primary)] outline-none transition-all duration-200 placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30"
         />
         <button
           type="submit"
           disabled={!draft.trim()}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-white transition-all duration-200 hover:bg-[var(--accent-dark)] active:scale-[0.95] disabled:opacity-40"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-white transition-all duration-200 hover:bg-[var(--accent-dark)] active:scale-[0.95] disabled:opacity-40"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

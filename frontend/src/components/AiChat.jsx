@@ -14,6 +14,8 @@ import AiBotBadge from './AiBotBadge.jsx';
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '😮'];
 const AI_LOGO = '/bgc-ai-logo.png';
+const MAX_IMAGE_EDGE = 1280;
+const JPEG_QUALITY = 0.82;
 
 const SUGGESTED_QUESTIONS = [
   'Who will win the World Cup 2026?',
@@ -22,19 +24,57 @@ const SUGGESTED_QUESTIONS = [
   'Best players this tournament?',
 ];
 
+/** Compress a File into a reasonably small data URL for vision APIs. */
+function compressImageFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type?.startsWith('image/')) {
+      reject(new Error('Please choose an image file'));
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      reject(new Error('Image is too large (max 12MB before compress)'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read image'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Invalid image'));
+      img.onload = () => {
+        let { width, height } = img;
+        const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(width, height));
+        width = Math.max(1, Math.round(width * scale));
+        height = Math.max(1, Math.round(height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+        resolve(dataUrl);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function AiChat() {
   const [joined, setJoined] = useState(false);
   const [nameInput, setNameInput] = useState(() => getProfile().displayName || getStoredUsername());
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
+  const [pendingImage, setPendingImage] = useState(null); // data URL
   const [onlineCount, setOnlineCount] = useState(0);
   const [myUsername, setMyUsername] = useState('');
-  const [aiTyping, setAiTyping] = useState(false);
+  // null | 'searching' | 'thinking' | 'translating' — driven by ai:typing { phase }
+  const [aiPhase, setAiPhase] = useState(null);
   const [openReactionFor, setOpenReactionFor] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
   const [errorNote, setErrorNote] = useState('');
   const listRef = useRef(null);
   const inputRef = useRef(null);
+  const fileRef = useRef(null);
   const messageRefs = useRef({});
 
   // Auto-join if a profile name or stored username exists
@@ -71,8 +111,30 @@ export default function AiChat() {
     function onCount(count) {
       setOnlineCount(typeof count === 'number' ? count : 0);
     }
-    function onTyping({ isTyping }) {
-      setAiTyping(!!isTyping);
+    function onTyping({ isTyping, phase }) {
+      if (!isTyping || phase === 'idle') {
+        setAiPhase(null);
+        return;
+      }
+      // planning/verifying are internal pipeline steps — show user-friendly labels
+      if (phase === 'planning') {
+        setAiPhase('planning');
+        return;
+      }
+      if (phase === 'verifying') {
+        setAiPhase('verifying');
+        return;
+      }
+      if (
+        phase === 'searching'
+        || phase === 'scores'
+        || phase === 'translating'
+        || phase === 'thinking'
+      ) {
+        setAiPhase(phase);
+        return;
+      }
+      setAiPhase('thinking');
     }
     function onReactionUpdate({ messageId, reactions }) {
       setMessages((prev) =>
@@ -120,7 +182,7 @@ export default function AiChat() {
     if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
-  }, [messages, aiTyping]);
+  }, [messages, aiPhase]);
 
   function handleJoin(e) {
     e.preventDefault();
@@ -134,17 +196,37 @@ export default function AiChat() {
     setJoined(true);
   }
 
-  function sendMessage(text) {
+  function sendMessage(text, imageDataUrl = null) {
     const clean = (text || '').trim();
-    if (!clean) return;
-    socket.emit('ai:message', { text: clean, replyTo: replyTo?.id || undefined });
+    const image = imageDataUrl || pendingImage;
+    if (!clean && !image) return;
+    socket.emit('ai:message', {
+      text: clean || (image ? 'What is in this image?' : ''),
+      replyTo: replyTo?.id || undefined,
+      image: image ? { dataUrl: image } : undefined,
+    });
     setDraft('');
+    setPendingImage(null);
     setReplyTo(null);
   }
 
   function handleSend(e) {
     e.preventDefault();
-    sendMessage(draft);
+    sendMessage(draft, pendingImage);
+  }
+
+  async function handleImagePick(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const dataUrl = await compressImageFile(file);
+      setPendingImage(dataUrl);
+      inputRef.current?.focus();
+    } catch (err) {
+      setErrorNote(err.message || 'Could not attach image');
+      setTimeout(() => setErrorNote(''), 4000);
+    }
   }
 
   function sendReaction(messageId, emoji) {
@@ -183,7 +265,7 @@ export default function AiChat() {
         <div className="mb-4 text-center">
           <h3 className="font-display text-base font-bold text-[var(--text-primary)]">BGC AI Chatroom</h3>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
-            Ask the AI anything about the World Cup — everyone in the room sees the whole conversation.
+            Ask about the World Cup — or attach a photo (scoreboard, lineup, graphic) and BGC AI will read it.
           </p>
         </div>
         <form onSubmit={handleJoin} className="w-full max-w-xs space-y-3">
@@ -192,7 +274,8 @@ export default function AiChat() {
             onChange={(e) => setNameInput(e.target.value)}
             placeholder={`Your name (or join as ${getGuestName()})`}
             maxLength={24}
-            className="input-field text-center"
+            className="input-field w-full text-center text-base"
+            style={{ fontSize: 16 }}
           />
           <button type="submit" className="btn-primary w-full">Enter AI Chatroom</button>
         </form>
@@ -202,9 +285,9 @@ export default function AiChat() {
 
   // ----- Chatroom screen ----------------------------------------------------
   return (
-    <div className="flex h-full flex-col relative">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-[var(--border-primary)] bg-gradient-to-r from-amber-500/10 to-transparent px-4 py-2.5">
+    <div className="chat-panel-root relative" data-chat-root>
+      {/* Header (hidden while soft keyboard open) */}
+      <div className="chat-panel-header flex shrink-0 items-center justify-between border-b border-[var(--border-primary)] bg-gradient-to-r from-amber-500/10 to-transparent px-4 py-2.5">
         <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[var(--text-primary)]">
           <img src={AI_LOGO} alt="BGC AI" className="h-6 w-6 rounded-lg ring-1 ring-amber-500/40" />
           BGC AI Chatroom
@@ -216,7 +299,7 @@ export default function AiChat() {
       </div>
 
       {/* Messages */}
-      <div ref={listRef} className="scrollbar-thin flex-1 space-y-2.5 overflow-y-auto px-4 py-3">
+      <div ref={listRef} className="chat-panel-messages scrollbar-thin space-y-2.5 px-4 py-3">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
             <img src={AI_LOGO} alt="BGC AI" className="h-12 w-12 rounded-full ring-2 ring-amber-500/30" />
@@ -277,6 +360,17 @@ export default function AiChat() {
                       </span>
                     </div>
                   </button>
+                )}
+
+                {m.image?.dataUrl && (
+                  <div className="mt-1.5 ml-8 max-w-[min(100%,280px)] overflow-hidden rounded-xl border border-[var(--border-primary)] bg-black/30">
+                    <img
+                      src={m.image.dataUrl}
+                      alt="Shared"
+                      className="max-h-48 w-full object-contain"
+                      loading="lazy"
+                    />
+                  </div>
                 )}
 
                 <div
@@ -360,10 +454,61 @@ export default function AiChat() {
           })}
         </AnimatePresence>
 
-        {/* AI typing indicator */}
-        <AnimatePresence>
-          {aiTyping && (
+        {/* AI status: searching first, then typing — never names tools/providers */}
+        <AnimatePresence mode="wait">
+          {aiPhase === 'planning' && (
             <motion.div
+              key="ai-planning"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex items-center gap-2"
+            >
+              <img src={AI_LOGO} alt="BGC AI" className="h-6 w-6 rounded-full ring-1 ring-violet-500/40" />
+              <div className="flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-3 py-2">
+                <span className="text-[10px] font-medium text-violet-300/90">Understanding your question…</span>
+              </div>
+            </motion.div>
+          )}
+          {aiPhase === 'scores' && (
+            <motion.div
+              key="ai-scores"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              className="flex items-center gap-2"
+            >
+              <img src={AI_LOGO} alt="BGC AI" className="h-6 w-6 rounded-full ring-1 ring-sky-500/40" />
+              <div className="flex items-center gap-1.5 rounded-full border border-sky-500/25 bg-sky-500/10 px-3 py-2">
+                <span className="relative flex h-3.5 w-3.5 items-center justify-center">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400/40" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-400" />
+                </span>
+                <span className="text-[10px] font-medium text-sky-300/90">Checking live scores…</span>
+              </div>
+            </motion.div>
+          )}
+          {aiPhase === 'searching' && (
+            <motion.div
+              key="ai-searching"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              className="flex items-center gap-2"
+            >
+              <img src={AI_LOGO} alt="BGC AI" className="h-6 w-6 rounded-full ring-1 ring-sky-500/40" />
+              <div className="flex items-center gap-1.5 rounded-full border border-sky-500/25 bg-sky-500/10 px-3 py-2">
+                <span className="relative flex h-3.5 w-3.5 items-center justify-center">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400/40" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-400" />
+                </span>
+                <span className="text-[10px] font-medium text-sky-300/90">Looking up the latest…</span>
+              </div>
+            </motion.div>
+          )}
+          {(aiPhase === 'thinking' || aiPhase === 'verifying') && (
+            <motion.div
+              key="ai-thinking"
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
@@ -374,7 +519,27 @@ export default function AiChat() {
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: '0ms' }} />
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: '150ms' }} />
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: '300ms' }} />
-                <span className="ml-1 text-[10px] text-amber-500/80">BGC AI is analyzing…</span>
+                <span className="ml-1 text-[10px] text-amber-500/80">
+                  {aiPhase === 'verifying' ? 'Double-checking facts…' : 'BGC AI is typing…'}
+                </span>
+              </div>
+            </motion.div>
+          )}
+          {aiPhase === 'translating' && (
+            <motion.div
+              key="ai-translating"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex items-center gap-2"
+            >
+              <img src={AI_LOGO} alt="BGC AI" className="h-6 w-6 rounded-full ring-1 ring-violet-500/40" />
+              <div className="flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-3 py-2">
+                <span className="relative flex h-3.5 w-3.5 items-center justify-center">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400/40" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-400" />
+                </span>
+                <span className="text-[10px] font-medium text-violet-300/90">Translating…</span>
               </div>
             </motion.div>
           )}
@@ -426,20 +591,79 @@ export default function AiChat() {
         )}
       </AnimatePresence>
 
-      {/* Composer */}
-      <form onSubmit={handleSend} className="flex items-center gap-1.5 border-t border-[var(--border-primary)] bg-[var(--bg-tertiary)]/40 p-2.5">
+      {/* Image preview before send */}
+      <AnimatePresence>
+        {pendingImage && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            className="flex shrink-0 items-center gap-2 border-t border-[var(--border-primary)] bg-[var(--bg-tertiary)]/50 px-3 py-2"
+          >
+            <img
+              src={pendingImage}
+              alt="Attach"
+              className="h-14 w-14 rounded-lg border border-[var(--border-primary)] object-cover"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold text-[var(--text-primary)]">Photo attached</p>
+              <p className="text-[10px] text-[var(--text-muted)]">BGC AI will answer from this image</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPendingImage(null)}
+              className="rounded-full px-2 py-1 text-[10px] font-bold text-red-400 hover:bg-red-500/10"
+            >
+              Remove
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Composer — sticky bottom; 16px font prevents iOS focus-zoom */}
+      <form
+        onSubmit={handleSend}
+        className="chat-panel-composer flex items-center gap-1.5 border-t border-[var(--border-primary)] bg-[var(--bg-tertiary)]/95 p-2.5 backdrop-blur-sm"
+      >
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleImagePick}
+        />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--border-primary)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] transition-colors hover:border-amber-500/40 hover:text-amber-500"
+          title="Attach photo"
+          aria-label="Attach photo"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        </button>
         <input
           ref={inputRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Ask BGC AI anything about the World Cup…"
+          onFocus={() => {
+            // Avoid window.scrollTo — Chrome pans visualViewport and hides composer
+          }}
+          placeholder={pendingImage ? 'Ask about this photo…' : 'Ask BGC AI — or attach a photo…'}
           maxLength={500}
-          className="min-w-0 flex-1 rounded-full border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-2.5 text-sm text-[var(--text-primary)] outline-none transition-all duration-200 placeholder:text-[var(--text-muted)] focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30"
+          enterKeyHint="send"
+          autoComplete="off"
+          autoCorrect="on"
+          autoCapitalize="sentences"
+          inputMode="text"
+          style={{ fontSize: 16, scrollMargin: 0 }}
+          className="min-w-0 flex-1 rounded-full border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-2.5 text-base text-[var(--text-primary)] outline-none transition-all duration-200 placeholder:text-[var(--text-muted)] focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30"
         />
         <button
           type="submit"
-          disabled={!draft.trim()}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white transition-all duration-200 hover:bg-amber-600 active:scale-[0.95] disabled:opacity-40"
+          disabled={!draft.trim() && !pendingImage}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white transition-all duration-200 hover:bg-amber-600 active:scale-[0.95] disabled:opacity-40"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

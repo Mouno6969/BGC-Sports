@@ -3,8 +3,10 @@
 // ---------------------------------------------------------------------------
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { apiGet } from '../lib/config.js';
+import { apiGet, logoUrl } from '../lib/config.js';
+import { FabChannelListSkeleton } from './Skeleton.jsx';
 import LiveBadge from './LiveBadge.jsx';
+import { armChannelMediaTransition } from '../lib/viewTransitions.js';
 
 export default function WorldCupMobileFab() {
   const location = useLocation();
@@ -76,25 +78,34 @@ export default function WorldCupMobileFab() {
 
             <div className="scrollbar-thin overflow-y-auto px-4 pb-4 space-y-2">
               {loading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="skeleton h-14 rounded-xl" />
-                ))
+                <FabChannelListSkeleton count={4} />
               ) : channels.length === 0 ? (
                 <p className="py-6 text-center text-sm text-[var(--text-muted)]">No FIFA channels live right now.</p>
               ) : (
                 channels.map((ch) => (
                   <Link
                     key={ch.id || ch.url}
-                    to={`/watch?url=${encodeURIComponent(ch.url)}&name=${encodeURIComponent(ch.name)}&logo=${encodeURIComponent(ch.logo || '')}&source=fifa`}
+                    to={`/watch?url=${encodeURIComponent(ch.url)}&name=${encodeURIComponent(ch.name)}&logo=${encodeURIComponent(ch.logo || '')}&source=fifa${ch.type ? `&type=${encodeURIComponent(ch.type)}` : ''}`}
+                    viewTransition
+                    onPointerDown={() => armChannelMediaTransition(ch.url)}
                     onClick={() => setOpen(false)}
                     className="flex items-center gap-3 rounded-xl border border-yellow-500/20 bg-[var(--bg-tertiary)] p-3 transition-colors active:bg-[var(--bg-card-hover)]"
                   >
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--bg-secondary)]">
                       {ch.logo ? (
-                        <img src={ch.logo} alt="" className="h-full w-full object-contain p-1" />
-                      ) : (
-                        <span>🏆</span>
-                      )}
+                        <img
+                          src={logoUrl(ch.logo)}
+                          alt=""
+                          className="h-full w-full object-contain p-1"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const sib = e.currentTarget.nextElementSibling;
+                            if (sib) sib.hidden = false;
+                          }}
+                        />
+                      ) : null}
+                      <span hidden={Boolean(ch.logo)}>🏆</span>
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-[var(--text-primary)]">{ch.name}</p>
@@ -109,6 +120,7 @@ export default function WorldCupMobileFab() {
 
               <Link
                 to="/?tab=worldcup"
+                viewTransition
                 onClick={() => setOpen(false)}
                 className="mt-2 flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[var(--accent)] text-sm font-bold text-white"
               >

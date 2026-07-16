@@ -1,23 +1,20 @@
 // ---------------------------------------------------------------------------
 // LiveScoresSection — dedicated scores section on homepage showing REAL match
-// data fetched from the backend (/api/scores -> TheSportsDB).
-// Shows live, upcoming, and finished matches with real team badges and scores.
+// data from /api/scores (ESPN primary + TheSportsDB fallback).
+// Kickoff times render in the visitor's local timezone/country.
 // Auto-refreshes every 60 seconds.
 // ---------------------------------------------------------------------------
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { apiGet, logoUrl } from '../lib/config.js';
 import LiveBadge from './LiveBadge.jsx';
-
-function formatKickoff(match) {
-  if (!match.timestamp) return 'Scheduled';
-  const d = new Date(match.timestamp);
-  const today = new Date();
-  const isToday = d.toDateString() === today.toDateString();
-  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (isToday) return `Today ${time}`;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ` ${time}`;
-}
+import JsonLd from './JsonLd.jsx';
+import { buildPageSportsGraph } from '../lib/sportsEventSchema.js';
+import { formatKickoff, localTimeHint } from '../lib/utils.js';
+import { matchCenterPath } from '../lib/matchLinks.js';
+import { MatchGridSkeleton } from './Skeleton.jsx';
+import MatchActionRow from './MatchActionRow.jsx';
 
 function TeamBadge({ badge, name }) {
   if (badge) {
@@ -41,9 +38,21 @@ function TeamBadge({ badge, name }) {
 }
 
 function MatchCard({ match, onMatchClick }) {
+  const navigate = useNavigate();
   const isLive = match.status === 'LIVE';
   const isUpcoming = match.status === 'UPCOMING';
   const isFinished = match.status === 'FINISHED';
+  const location = [match.venue, match.city].filter(Boolean).join(' · ');
+  const stage = match.stage || match.round;
+  const centerPath = matchCenterPath(match);
+
+  const className = `card-sports p-4 transition-all duration-300 hover:scale-[1.02] ${
+    isLive
+      ? 'border-red-500/30 bg-red-500/5 hover:border-red-500/50'
+      : isUpcoming
+        ? 'border-[var(--accent)]/20 bg-[var(--accent)]/5 hover:border-[var(--accent)]/40'
+        : ''
+  } ${centerPath ? 'cursor-pointer' : ''}`;
 
   return (
     <motion.div
@@ -51,102 +60,93 @@ function MatchCard({ match, onMatchClick }) {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.4 }}
-      onClick={() => onMatchClick(match)}
-      className={`card-sports cursor-pointer p-4 transition-all duration-300 hover:scale-[1.02] ${
-        isLive
-          ? 'border-red-500/30 bg-red-500/5 hover:border-red-500/50'
-          : isUpcoming
-          ? 'border-[var(--accent)]/20 bg-[var(--accent)]/5 hover:border-[var(--accent)]/40'
-          : ''
-      }`}
+      className={className}
+      onClick={() => {
+        if (centerPath) navigate(centerPath);
+        else onMatchClick?.(match);
+      }}
     >
-      {/* League header */}
-      <div className="mb-3 flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] truncate">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-1.5 truncate text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
           {match.league}
+          {stage && !String(stage).toLowerCase().includes(String(match.league || '').toLowerCase()) && (
+            <span className="font-semibold normal-case tracking-normal text-[var(--text-muted)]/80">
+              · {stage}
+            </span>
+          )}
         </span>
-        {isLive && (
-          <LiveBadge label={match.progress ? `${match.progress}'` : 'LIVE'} />
-        )}
+        {isLive && <LiveBadge label={match.progress || 'LIVE'} />}
         {isUpcoming && (
-          <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent ring-1 ring-accent/20 whitespace-nowrap">
-            {formatKickoff(match)}
+          <span className="shrink-0 whitespace-nowrap rounded-full bg-accent/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent ring-1 ring-accent/20">
+            {formatKickoff(match, { style: 'short' })}
           </span>
         )}
         {isFinished && (
-          <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">
-            Full Time
+          <span className="shrink-0 rounded-full bg-slate-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">
+            {match.statusDetail || 'Full Time'}
           </span>
         )}
       </div>
 
-      {/* Teams & Score */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
-          <div className="relative">
-            <TeamBadge badge={match.homeBadge} name={match.home} />
-            <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-xs font-bold text-accent">
-              {(match.home || '?').charAt(0)}
-            </div>
-          </div>
-          <span className="text-[11px] font-semibold text-[var(--text-primary)] text-center truncate w-full">{match.home}</span>
+        <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
+          <TeamBadge badge={match.homeBadge} name={match.home} />
+          <span className="w-full truncate text-center text-[11px] font-semibold text-[var(--text-primary)]">
+            {match.home}
+          </span>
         </div>
-
-        <div className="flex flex-col items-center gap-1 shrink-0">
+        <div className="flex shrink-0 flex-col items-center gap-1">
           {!isUpcoming && match.homeScore !== null ? (
-              <span className={`text-xl font-extrabold px-3 py-1 rounded-lg ${isLive ? 'text-red-400 bg-red-500/10' : 'text-[var(--text-primary)] bg-[var(--bg-tertiary)]'}`}>
+            <span
+              className={`rounded-lg px-3 py-1 text-xl font-extrabold ${
+                isLive ? 'bg-red-500/10 text-red-400' : 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
+              }`}
+            >
               {match.homeScore} - {match.awayScore}
             </span>
           ) : (
-            <span className="text-sm font-bold text-[var(--text-muted)] px-3 py-1">VS</span>
+            <span className="px-3 py-1 text-sm font-bold text-[var(--text-muted)]">VS</span>
           )}
           {isLive && (
-            <span className="text-[9px] font-bold text-red-400 uppercase animate-pulse">● Live</span>
+            <span className="animate-pulse text-[9px] font-bold uppercase text-red-400">● Live</span>
+          )}
+          {isFinished && match.timestamp && (
+            <span className="whitespace-nowrap text-[9px] text-[var(--text-muted)]">
+              {formatKickoff(match, { style: 'short', withTz: false })}
+            </span>
           )}
         </div>
-
-        <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
-          <div className="relative">
-            <TeamBadge badge={match.awayBadge} name={match.away} />
-            <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-xs font-bold text-accent">
-              {(match.away || '?').charAt(0)}
-            </div>
-          </div>
-          <span className="text-[11px] font-semibold text-[var(--text-primary)] text-center truncate w-full">{match.away}</span>
-        </div>
-      </div>
-
-      {/* Watch button for live */}
-      {isLive && (
-        <div className="mt-3 flex items-center justify-center">
-          <span className="text-[10px] font-bold text-accent hover:text-accent-light transition-colors">
-            Watch Related Channels →
+        <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
+          <TeamBadge badge={match.awayBadge} name={match.away} />
+          <span className="w-full truncate text-center text-[11px] font-semibold text-[var(--text-primary)]">
+            {match.away}
           </span>
         </div>
+      </div>
+
+      {(location || match.broadcasts?.length > 0) && (
+        <div className="mt-2.5 flex flex-col gap-0.5 border-t border-[var(--border-primary)]/60 pt-2">
+          {location && (
+            <p className="truncate text-[9px] text-[var(--text-muted)]" title={location}>
+              📍 {location}
+            </p>
+          )}
+          {match.broadcasts?.length > 0 && (
+            <p className="truncate text-[9px] text-[var(--text-muted)]" title={match.broadcasts.join(', ')}>
+              📺 {match.broadcasts.slice(0, 3).join(' · ')}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Hub: Watch · Predict · Stats · Party — Stats opens Match Center */}
+      <MatchActionRow match={match} stopPropagation />
+      {centerPath && (
+        <p className="mt-1.5 text-center text-[9px] font-semibold text-[var(--text-muted)]">
+          Tap card for Match Center
+        </p>
       )}
     </motion.div>
-  );
-}
-
-function SkeletonCard() {
-  return (
-    <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="skeleton h-3 w-20 rounded" />
-        <div className="skeleton h-4 w-12 rounded-full" />
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex flex-col items-center gap-1 flex-1">
-          <div className="skeleton h-8 w-8 rounded-full" />
-          <div className="skeleton h-3 w-14 rounded" />
-        </div>
-        <div className="skeleton h-8 w-14 rounded-lg" />
-        <div className="flex flex-col items-center gap-1 flex-1">
-          <div className="skeleton h-8 w-8 rounded-full" />
-          <div className="skeleton h-3 w-14 rounded" />
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -156,7 +156,7 @@ export default function LiveScoresSection({ onMatchClick }) {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
 
-  // Fetch real scores from backend + auto-refresh every 60s
+  // Fetch real scores from backend + auto-refresh every 60s / pull-to-refresh
   useEffect(() => {
     let alive = true;
     const load = async () => {
@@ -174,9 +174,12 @@ export default function LiveScoresSection({ onMatchClick }) {
     };
     load();
     const interval = setInterval(load, 60000);
+    const onPull = () => load();
+    window.addEventListener('bgc:pull-refresh', onPull);
     return () => {
       alive = false;
       clearInterval(interval);
+      window.removeEventListener('bgc:pull-refresh', onPull);
     };
   }, []);
 
@@ -193,8 +196,20 @@ export default function LiveScoresSection({ onMatchClick }) {
 
   const liveCount = matches.filter((m) => m.status === 'LIVE').length;
 
+  const sportsJsonLd = useMemo(
+    () =>
+      matches.length
+        ? buildPageSportsGraph(matches, {
+            listName: 'Football live scores and fixtures',
+            pagePath: '/?tab=scores',
+          })
+        : null,
+    [matches]
+  );
+
   return (
-    <section className="space-y-4">
+    <section className="space-y-4" itemScope itemType="https://schema.org/ItemList">
+      <JsonLd id="live-scores-sports-events" data={sportsJsonLd} />
       {/* Section Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
@@ -208,7 +223,7 @@ export default function LiveScoresSection({ onMatchClick }) {
             </h2>
             <p className="text-[10px] text-[var(--text-muted)]">
               {lastUpdated
-                ? `Real data · Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · Auto-refreshes every 60s`
+                ? `Live data · Updated ${lastUpdated.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} · ${localTimeHint()}`
                 : 'Loading real match data...'}
             </p>
           </div>
@@ -224,6 +239,8 @@ export default function LiveScoresSection({ onMatchClick }) {
             <button
               key={f.id}
               type="button"
+              data-haptic="selection"
+              data-haptic-tab="1"
               onClick={() => setActiveFilter(f.id)}
               className={`rounded-full px-3 py-1 text-[10px] font-bold transition-all ${
                 activeFilter === f.id
@@ -239,11 +256,7 @@ export default function LiveScoresSection({ onMatchClick }) {
 
       {/* Match Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <SkeletonCard key={i} />
-          ))}
-        </div>
+        <MatchGridSkeleton count={8} />
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] p-8 text-center">
           <p className="text-sm text-[var(--text-muted)]">
