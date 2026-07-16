@@ -439,10 +439,10 @@ export default function WatchPage() {
   // Resolving a deep-link slug — show a loader instead of "No Channel Selected"
   if (!url && slug && slugStatus === 'loading') {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-16 text-center">
+      <div className="page-container flex min-h-[50vh] items-center justify-center text-center">
         <div className="flex flex-col items-center gap-4">
           <div className="h-9 w-9 animate-spin rounded-full border-2 border-[var(--accent)]/30 border-t-[var(--accent)]" role="status" aria-label="Loading" />
-          <p className="text-sm text-[var(--text-muted)]">Loading channel…</p>
+          <p className="type-body text-[var(--text-muted)]">Loading channel…</p>
         </div>
       </div>
     );
@@ -454,21 +454,21 @@ export default function WatchPage() {
   if (!url && slug && slugStatus === 'notfound') {
     const partyCode = searchParams.get('party') || searchParams.get('room') || '';
     return (
-      <div className="mx-auto max-w-7xl px-4 py-16 text-center">
-        <div className="flex flex-col items-center gap-4">
+      <div className="page-container flex min-h-[50vh] flex-col items-center justify-center text-center">
+        <div className="flex flex-col items-center gap-4 animate-fadeInUp">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent-muted)] ring-1 ring-[var(--accent)]/20">
-            <svg className="h-7 w-7 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="h-7 w-7 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
           </div>
-          <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">Channel Not Found</h2>
-          <p className="text-sm text-[var(--text-muted)]">This channel link is no longer available. It may have been renamed or removed.</p>
+          <h2 className="type-h2 text-[var(--text-primary)]">Channel Not Found</h2>
+          <p className="type-body max-w-md text-[var(--text-secondary)]">This channel link is no longer available. It may have been renamed or removed.</p>
           {partyCode && (
-            <p className="text-xs text-[var(--text-muted)]">
+            <p className="type-caption text-[var(--text-muted)]">
               Your watch party code <span className="font-mono font-bold text-[var(--accent)]">{partyCode}</span> is still valid — pick any channel and join with it.
             </p>
           )}
-          <Link to="/" className="mt-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white active:scale-95 transition-transform">
+          <Link to="/" className="mt-2 inline-flex min-h-[44px] items-center rounded-xl bg-[var(--accent)] px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-[var(--accent)]/20 transition-all hover:bg-[var(--accent-dark)] active:scale-[0.97]">
             Browse Channels
           </Link>
         </div>
@@ -479,16 +479,16 @@ export default function WatchPage() {
   // No URL state
   if (!url) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-16 text-center">
-        <div className="flex flex-col items-center gap-4">
+      <div className="page-container flex min-h-[50vh] flex-col items-center justify-center text-center">
+        <div className="flex flex-col items-center gap-4 animate-fadeInUp">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent-muted)] ring-1 ring-[var(--accent)]/20">
-            <svg className="h-7 w-7 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="h-7 w-7 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
           </div>
-          <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">No Channel Selected</h2>
-          <p className="text-sm text-[var(--text-muted)]">Choose a channel from the homepage to start watching.</p>
-          <Link to="/" className="mt-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white active:scale-95 transition-transform">
+          <h2 className="type-h2 text-[var(--text-primary)]">No Channel Selected</h2>
+          <p className="type-body max-w-md text-[var(--text-secondary)]">Choose a channel from the homepage to start watching.</p>
+          <Link to="/" className="mt-2 inline-flex min-h-[44px] items-center rounded-xl bg-[var(--accent)] px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-[var(--accent)]/20 transition-all hover:bg-[var(--accent-dark)] active:scale-[0.97]">
             Browse Channels
           </Link>
         </div>
@@ -498,19 +498,20 @@ export default function WatchPage() {
 
   if (isToffee) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-16 text-center">
-        <div className="flex flex-col items-center gap-4 max-w-md mx-auto">
+      <div className="page-container flex min-h-[50vh] flex-col items-center justify-center text-center">
+        <div className="mx-auto flex max-w-md flex-col items-center gap-4 animate-fadeInUp">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-500/10 ring-1 ring-orange-500/20">
-            <span className="text-2xl">📺</span>
+            <span className="text-2xl" aria-hidden="true">📺</span>
           </div>
-          <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">Toffee Unavailable</h2>
-          <p className="text-sm text-[var(--text-muted)]">
+          <h2 className="type-h2 text-[var(--text-primary)]">Toffee Unavailable</h2>
+          <p className="type-body text-[var(--text-secondary)]">
             Toffee live streams have been removed. Watch FIFA World Cup matches on the World Cup tab instead.
           </p>
-          <Link to="/?tab=worldcup" className="mt-2 inline-flex min-h-[44px] items-center rounded-lg bg-yellow-500 px-4 py-2 text-sm font-bold text-black active:scale-95 transition-transform">
+          <Link to="/?tab=worldcup" className="mt-2 inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[var(--wc-gold)] px-6 py-2.5 text-sm font-bold text-black shadow-lg shadow-yellow-500/20 transition-all active:scale-[0.97]">
+            <span aria-hidden="true">🏆</span>
             Watch FIFA Live
           </Link>
-          <Link to="/" className="text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--accent)]">
+          <Link to="/" className="min-h-[44px] text-sm font-semibold text-[var(--text-secondary)] transition-colors hover:text-[var(--accent)]">
             Back to Home
           </Link>
         </div>
@@ -731,20 +732,20 @@ export default function WatchPage() {
           </div>
 
           {/* Channel Info Bar — Fixed positioning, no text overlap */}
-          <div className="mx-3 mt-3 flex items-center gap-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-3 py-2.5 sm:mx-0 sm:px-4 sm:py-3">
+          <div className="card-sports mx-3 mt-3 flex items-center gap-2 px-3 py-2.5 sm:mx-0 sm:px-4 sm:py-3">
             <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
               {logo && logo.startsWith('http') && (
-                <img src={logo} alt={name} className="h-9 w-9 shrink-0 rounded-lg object-contain bg-[var(--bg-tertiary)] p-1 sm:h-10 sm:w-10" />
+                <img src={logo} alt={name} className="h-9 w-9 shrink-0 rounded-lg object-contain bg-[var(--bg-tertiary)] p-1 ring-1 ring-[var(--border-primary)] sm:h-10 sm:w-10" />
               )}
               <div className="min-w-0 flex-1">
-                <h1 className="truncate font-display text-sm font-bold text-[var(--text-primary)] sm:text-base">{name}</h1>
+                <h1 className="type-h3 truncate text-[var(--text-primary)]">{name}</h1>
                 <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                  <span className="shrink-0 rounded-md bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold text-white">
+                  <span className="shrink-0 rounded-full bg-[var(--accent-muted)] px-2.5 py-0.5 type-label text-[var(--accent-light)] ring-1 ring-[var(--accent)]/25">
                     Sports
                   </span>
                   <LiveBadge />
                   {availableLevels.length > 0 && (
-                    <span className="shrink-0 text-[10px] text-[var(--text-muted)]">{currentQualityLabel}</span>
+                    <span className="shrink-0 type-caption text-[var(--text-muted)]">{currentQualityLabel}</span>
                   )}
                 </div>
               </div>
@@ -754,16 +755,16 @@ export default function WatchPage() {
                 onClick={() => {
                   navigator.clipboard?.writeText(window.location.href);
                 }}
-                className="flex h-8 items-center gap-1 rounded-lg border border-[var(--border-primary)] px-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors active:scale-95 sm:px-3 sm:gap-1.5"
+                className="flex min-h-[36px] items-center gap-1 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-2.5 text-xs font-semibold text-[var(--text-secondary)] transition-all hover:border-[var(--accent)]/30 hover:text-[var(--accent)] active:scale-95 sm:px-3 sm:gap-1.5"
               >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                 </svg>
                 <span className="hidden sm:inline">Share</span>
               </button>
               <button
                 onClick={() => setActivePanel(activePanel === 'chat' ? 'party' : 'chat')}
-                className="flex h-8 items-center gap-1 rounded-lg border border-[var(--border-primary)] px-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors active:scale-95 lg:hidden sm:px-3 sm:gap-1.5"
+                className="flex min-h-[36px] items-center gap-1 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-tertiary)] px-2.5 text-xs font-semibold text-[var(--text-secondary)] transition-all hover:border-[var(--accent)]/30 hover:text-[var(--accent)] active:scale-95 lg:hidden sm:px-3 sm:gap-1.5"
                 title={activePanel === 'chat' ? 'Show watch party' : 'Show live chat'}
               >
                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -818,27 +819,27 @@ export default function WatchPage() {
 
           {/* Related Channels — tucked away in theater mode to keep focus on the match */}
           {relatedChannels.length > 0 && !theater && (
-            <section className="mx-3 space-y-2 sm:mx-0">
-              <h3 className="font-display text-sm font-bold text-[var(--text-primary)]">More Sports Channels</h3>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <section className="mx-3 space-y-3 sm:mx-0">
+              <h3 className="type-h3 text-[var(--text-primary)]">More Sports Channels</h3>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
                 {relatedChannels.map((ch) => (
                   <Link
                     key={ch.url || ch.name}
                     to={`/watch?url=${encodeURIComponent(ch.url)}&name=${encodeURIComponent(ch.name)}&logo=${encodeURIComponent(ch.logo || '')}&source=${encodeURIComponent(source || '')}`}
-                    className="flex items-center gap-2 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-2 transition-all hover:border-[var(--accent)]/30 hover:bg-[var(--bg-tertiary)] active:scale-[0.98]"
+                    className="card-sports flex items-center gap-2.5 rounded-xl p-2.5"
                   >
-                    <div className="flex h-8 w-10 shrink-0 items-center justify-center overflow-hidden rounded bg-[var(--bg-tertiary)]">
+                    <div className="flex h-9 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--bg-tertiary)] ring-1 ring-[var(--border-primary)]">
                       {ch.logo && ch.logo.startsWith('http') ? (
                         <img src={ch.logo} alt={ch.name} className="h-full w-full object-contain p-0.5" onError={(e) => { e.target.style.display = 'none'; }} />
                       ) : (
-                        <svg className="h-3 w-3 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="h-3.5 w-3.5 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                         </svg>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="truncate text-[10px] font-bold text-[var(--text-primary)]">{ch.name}</p>
-                      <LiveBadge className="scale-90 origin-left" />
+                      <p className="truncate text-xs font-bold text-[var(--text-primary)]">{ch.name}</p>
+                      <LiveBadge className="mt-0.5 scale-90 origin-left" />
                     </div>
                   </Link>
                 ))}
